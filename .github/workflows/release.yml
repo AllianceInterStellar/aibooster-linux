@@ -191,6 +191,10 @@ jobs:
           NOTES
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Update the notes too, not just the files. Uploading assets to an existing
+            # release used to leave its old text in place, and the page went on telling
+            # readers the engine was not included long after it was.
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
             gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$TAG" dist/* \
