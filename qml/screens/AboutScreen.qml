@@ -33,7 +33,7 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "Version 2.0.24"
+            text: "Version " + Application.version
             font.pixelSize: 14
             color: "#9CA3AF"
         }

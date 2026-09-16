@@ -80,8 +80,30 @@ jobs:
             dbus-x11 dconf-cli gsettings-desktop-schemas python3
           export XDG_STATE_HOME="$RUNNER_TEMP/state"
           mkdir -p "$XDG_STATE_HOME"
-          QT_QPA_PLATFORM=offscreen dbus-run-session -- ctest --test-dir build \
-            --output-on-failure --no-tests=error
+
+          # Run the binaries rather than ctest, and assert on QTest's own Totals line.
+          # A QSKIP exits zero, so ctest reports "Passed" for a test that decided not to
+          # run — and the proxy test skips itself when it finds no gsettings backend,
+          # which is exactly the condition a CI runner can drift into. Requiring
+          # "0 skipped" makes that a failure instead of a green tick over nothing.
+          for t in test_coreprocess test_systemproxy; do
+            echo "── $t ─────────────────────────────────"
+            QT_QPA_PLATFORM=offscreen dbus-run-session -- "./build/$t" 2>&1 | tee "$t.out"
+            totals="$(grep -E '^Totals:' "$t.out" | tail -1)"
+            echo "$totals"
+            if [ -z "$totals" ]; then
+              echo "::error::$t produced no Totals line — it did not run to completion"; exit 1
+            fi
+            case "$totals" in
+              *"0 failed"*) ;;
+              *) echo "::error::$t had failures"; exit 1 ;;
+            esac
+            case "$totals" in
+              *"0 skipped"*) ;;
+              *) echo "::error::$t skipped tests; a skipped suite is not a passing suite"; exit 1 ;;
+            esac
+          done
+          echo "All tests ran and passed with nothing skipped."
 
       # Starting is not the same as rendering. Run under a real X server and photograph the
       # window: a client whose UI comes up blank passes every check above.

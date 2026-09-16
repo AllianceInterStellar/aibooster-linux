@@ -98,7 +98,9 @@ ApplicationWindow {
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "v2.0.24"
+                    // From QGuiApplication::applicationVersion(), which main.cpp sets from the
+                    // build. Hardcoding it here shipped a 2.1.0 binary that called itself 2.0.24.
+                    text: "v" + Application.version
                     font.pixelSize: 10
                     color: "#6B7280"
                 }
