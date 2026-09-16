@@ -62,6 +62,15 @@ jobs:
           git clone --depth 1 https://github.com/AllianceInterStellar/aibooster-engine.git engine-src
           cd engine-src
           go version
+
+          # Fetch dependencies separately and retry. The module proxy drops connections
+          # often enough that a one-shot build fails on the download rather than on
+          # anything about the code — which is a confusing way to lose a release.
+          for attempt in 1 2 3; do
+            if go mod download; then break; fi
+            echo "module download attempt $attempt failed; retrying"
+            sleep 10
+          done
           # Tags read off the shipped binaries with `go version -m`, not copied from the
           # Makefile — the two disagree. with_naive_outbound is omitted deliberately: it
           # links a prebuilt libcronet.a using CREL relocations that the binutils on this
