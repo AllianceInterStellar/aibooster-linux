@@ -109,6 +109,33 @@ target_link_libraries(aibooster PRIVATE
     OpenSSL::Crypto
 )
 
+# ── Tests ────────────────────────────────────────────────────────────────────────────
+# Exercise the two subsystems that cannot be checked by compiling: engine supervision
+# (against a stub engine, so no GPL engine binary is needed) and the desktop-proxy round
+# trip (which writes machine-wide state, so the test that matters is that it is restored).
+option(AIBOOSTER_BUILD_TESTS "Build the test suite" ON)
+
+if(AIBOOSTER_BUILD_TESTS)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    enable_testing()
+
+    qt_add_executable(test_coreprocess
+        tests/test_coreprocess.cpp
+        src/core/CoreProcess.cpp
+        src/core/CoreProcess.h
+    )
+    target_link_libraries(test_coreprocess PRIVATE Qt6::Test Qt6::Network)
+    add_test(NAME coreprocess COMMAND test_coreprocess)
+
+    qt_add_executable(test_systemproxy
+        tests/test_systemproxy.cpp
+        src/platform/SystemProxy.cpp
+        src/platform/SystemProxy.h
+    )
+    target_link_libraries(test_systemproxy PRIVATE Qt6::Test)
+    add_test(NAME systemproxy COMMAND test_systemproxy)
+endif()
+
 # ── Install (XDG layout) ─────────────────────────────────────────────────────────────
 install(TARGETS aibooster RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES packaging/io.allianceinterstellar.AiBooster.desktop

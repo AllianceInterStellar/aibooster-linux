@@ -71,6 +71,49 @@ jobs:
           fi
           echo "App stayed up for the full timeout with a clean QML log."
 
+      # Engine supervision against a stub engine, and the desktop-proxy round trip.
+      # dbus-run-session gives gsettings a session bus; without one the GNOME backend is
+      # unusable and the proxy test would skip itself into a meaningless pass.
+      - name: Test
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            dbus-x11 dconf-cli gsettings-desktop-schemas python3
+          export XDG_STATE_HOME="$RUNNER_TEMP/state"
+          mkdir -p "$XDG_STATE_HOME"
+          QT_QPA_PLATFORM=offscreen dbus-run-session -- ctest --test-dir build \
+            --output-on-failure --no-tests=error
+
+      # Starting is not the same as rendering. Run under a real X server and photograph the
+      # window: a client whose UI comes up blank passes every check above.
+      - name: Screenshot the UI
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            xvfb x11-apps x11-utils imagemagick
+          Xvfb :99 -screen 0 1280x900x24 &
+          sleep 3
+          export DISPLAY=:99
+          ./build/aibooster > ui.log 2>&1 &
+          APP_PID=$!
+          sleep 12
+          if ! kill -0 "$APP_PID" 2>/dev/null; then
+            echo "::error::The app exited before it could be photographed"
+            cat ui.log; exit 1
+          fi
+          xwd -root -silent | convert xwd:- ui.png
+          kill "$APP_PID" || true
+          identify ui.png
+          cat ui.log || true
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshot
+          path: |
+            ui.png
+            ui.log
+          if-no-files-found: warn
+
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
