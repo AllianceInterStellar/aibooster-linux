@@ -229,8 +229,7 @@ void VpnCore::launchEngine(const QString &configContent)
 
     m_mixedPort = static_cast<quint16>(
         engineSettings.value(QStringLiteral("mixed-port")).toInt(SettingsModel::kDefaultMixedPort));
-    const quint16 clashApiPort = static_cast<quint16>(
-        engineSettings.value(QStringLiteral("clash-api-port")).toInt(SettingsModel::clashApiPort()));
+    // Readiness is the proxy inbound, not the Clash API — see CoreProcess::start.
 
     const QString configPath = runningConfigPath();
     const QString settingsPath = workingDir + QLatin1Char('/') + QLatin1String(kSettingsFileName);
@@ -246,7 +245,7 @@ void VpnCore::launchEngine(const QString &configContent)
     emit statusMessage(QStringLiteral("Config written to %1").arg(configPath));
 
     // The proxy is only applied once the engine is actually listening.
-    m_core->start(configPath, settingsPath, clashApiPort);
+    m_core->start(configPath, settingsPath, m_mixedPort);
 }
 
 void VpnCore::handleEngineReady()

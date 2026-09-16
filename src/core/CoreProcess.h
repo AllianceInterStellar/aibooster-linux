@@ -52,10 +52,19 @@ public:
     /// Spawns the engine with `run -c <configPath> -d <settingsPath>`.
     ///
     /// Returns as soon as the child is spawned; readiness is asynchronous and reported by
-    /// ready(). "The process is alive" is NOT readiness — the engine parses the config and
-    /// binds its listeners after start-up, and a config it rejects makes it exit moments
-    /// later. We therefore poll the Clash API port and only then call it running.
-    void start(const QString &configPath, const QString &settingsPath, quint16 clashApiPort);
+    /// ready(). "The process is alive" is NOT readiness — the engine binds its gRPC port
+    /// before it has even read the config, so a config it rejects would still look healthy.
+    ///
+    /// Readiness is therefore the PROXY INBOUND being open: that is the port traffic
+    /// actually goes through, and the engine binds it only after accepting the config and
+    /// starting the inbound. Measured against a real engine build: a rejected config binds
+    /// nothing, an accepted one has the proxy port up within a couple of seconds and
+    /// carries traffic immediately.
+    ///
+    /// Deliberately NOT the Clash API port. That listener blocks on downloading its
+    /// external web UI and never came up at all in 50 s of observation, so waiting on it
+    /// means never reporting a connection that is in fact working.
+    void start(const QString &configPath, const QString &settingsPath, quint16 proxyPort);
 
     /// Asks the engine to exit (SIGTERM), escalating to SIGKILL if it ignores that.
     void stop();
@@ -78,7 +87,7 @@ private:
     QString m_lastError;
     QString m_stderrTail;
     State m_state = Stopped;
-    quint16 m_clashApiPort = 0;
+    quint16 m_proxyPort = 0;
     int m_readyAttempts = 0;
 };
 

@@ -182,6 +182,20 @@ void SettingsModel::setLocalDnsPort(int v)
     emit changed();
 }
 
+namespace {
+
+/// "Auto" (or empty) means "whatever the engine would have chosen". Since the engine no
+/// longer fills that in for us on this path, we spell its own documented default out.
+/// Keep in sync with hiddify-core's DefaultHiddifyOptions().
+QString resolvedDns(const QString &configured)
+{
+    if (configured.isEmpty() || configured.compare(QLatin1String("Auto"), Qt::CaseInsensitive) == 0)
+        return QStringLiteral("1.1.1.1");
+    return configured;
+}
+
+} // namespace
+
 QByteArray SettingsModel::buildHiddifySettingsJson() const
 {
     QJsonObject root;
@@ -199,8 +213,12 @@ QByteArray SettingsModel::buildHiddifySettingsJson() const
     root["connection-test-url"] = m_connectionTestUrl;
     root["enable-fake-dns"]   = m_enableFakeDns;
 
-    // The core's DomainStrategy vocabulary; "Auto" means "leave the core's default alone".
+    // The core's DomainStrategy vocabulary.
     root["ipv6-mode"] = m_enableIPv6 ? QStringLiteral("prefer_ipv4") : QStringLiteral("ipv4_only");
+
+    // How often the engine re-tests outbounds. Omitting it yields 0, which is not "use the
+    // default" — see the note on DNS below.
+    root["url-test-interval"] = kDefaultUrlTestIntervalSeconds;
 
     // Routing.
     root["region"]              = m_region;
@@ -209,10 +227,20 @@ QByteArray SettingsModel::buildHiddifySettingsJson() const
     root["resolve-destination"] = m_resolveDestination;
     root["balancer-strategy"]   = m_balancerStrategy;
 
-    if (!m_remoteDns.isEmpty() && m_remoteDns.compare("Auto", Qt::CaseInsensitive) != 0)
-        root["remote-dns-address"] = m_remoteDns;
-    if (!m_directDns.isEmpty() && m_directDns.compare("Auto", Qt::CaseInsensitive) != 0)
-        root["direct-dns-address"] = m_directDns;
+    // ⚠️ These are always written, even for "Auto".
+    //
+    // This document is handed to the engine as a FILE, and the engine unmarshals it into a
+    // zero-valued options struct — it does NOT merge it over its own defaults. (The
+    // in-process API these settings were originally written for did merge, which is why
+    // omitting a field used to mean "keep the default". It no longer does.)
+    //
+    // So a missing remote-dns-address arrives as the empty string, and the engine rejects
+    // the whole config with "invalid server address" — i.e. the client cannot connect at
+    // all. Verified against a real engine build; see tests/engine-settings.
+    //
+    // Any field whose zero value is invalid must therefore carry the engine's own default.
+    root["remote-dns-address"] = resolvedDns(m_remoteDns);
+    root["direct-dns-address"] = resolvedDns(m_directDns);
 
     // TLS tricks — only the keys config.TLSTricks actually declares.
     QJsonObject tls;

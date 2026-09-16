@@ -64,12 +64,17 @@ kwriteconfig6 --file kioslaverc --group 'Proxy Settings' --key ProxyType 0   # K
 
 ## Building
 
-Requires Qt 6.4+, OpenSSL and a C++17 compiler.
+Requires Qt 6.2+, OpenSSL and a C++17 compiler. Built and run on Ubuntu 22.04 (Qt 6.2)
+and Ubuntu 24.04 (Qt 6.4).
+
+On Ubuntu 22.04, `libqt6opengl6-dev` is required explicitly — 24.04 pulls it in for you, and
+without it CMake reports Qt6Quick as missing while its config file plainly exists.
 
 ```bash
 # Debian / Ubuntu
 sudo apt install build-essential cmake ninja-build \
-    qt6-base-dev qt6-declarative-dev libgl1-mesa-dev libssl-dev
+    qt6-base-dev qt6-declarative-dev libqt6opengl6-dev libgl1-mesa-dev \
+    libqt6svg6 libssl-dev
 
 # Fedora
 sudo dnf install gcc-c++ cmake ninja-build \
@@ -118,7 +123,26 @@ The client needs an `aibooster-core` binary at runtime and looks for it, in orde
 If it is missing, the client says so and lists exactly where it looked. The official engine
 build ships with the [AI Booster downloads](https://allianceinterstellar.com); you can also
 build one yourself from [hiddify-core](https://github.com/hiddify/hiddify-core) — the client
-drives it through its standard `run -c <config> -d <settings>` interface.
+drives it through its standard `run -c <config> -d <settings>` interface:
+
+```bash
+# Go 1.26.1 specifically: on older toolchains a vendored TLS package asserts the layout of
+# crypto/tls.ConnectionState at init and panics before main().
+go build -trimpath -ldflags="-w -s -checklinkname=0 -buildid=" \
+  -tags "with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_grpc,with_awg,\
+tfogo_checklinkname0,with_conntrack,with_dhcp" \
+  -o aibooster-core ./cmd/main
+```
+
+`with_naive_outbound` is omitted above: it links a prebuilt `libcronet.a` that uses CREL
+relocations, which binutils older than 2.43 (Ubuntu 22.04 ships 2.38) cannot read. Add it
+back on a newer toolchain if you need the naive protocol.
+
+**Note on traffic statistics.** The client reads live traffic from the engine's Clash API.
+On the engine build tested here that listener never came up — it blocks downloading its
+external web UI — so the traffic figures stay at zero while the tunnel itself works
+normally. The connection is therefore *not* gated on the Clash API: readiness is the proxy
+inbound being open, which is the port traffic actually uses.
 
 ## Packaging
 

@@ -102,7 +102,7 @@ QString CoreProcess::locateBinary()
 }
 
 void CoreProcess::start(const QString &configPath, const QString &settingsPath,
-                        quint16 clashApiPort)
+                        quint16 proxyPort)
 {
     if (m_state == Starting || m_state == Running) {
         m_lastError = QStringLiteral("The VPN engine is already running");
@@ -122,7 +122,7 @@ void CoreProcess::start(const QString &configPath, const QString &settingsPath,
         return;
     }
 
-    m_clashApiPort = clashApiPort;
+    m_proxyPort = proxyPort;
     m_readyAttempts = 0;
     m_stderrTail.clear();
     m_lastError.clear();
@@ -176,22 +176,28 @@ void CoreProcess::pollReadiness()
         return;
     }
 
-    QTcpSocket probe;
-    probe.connectToHost(QHostAddress::LocalHost, m_clashApiPort);
-    if (probe.waitForConnected(200)) {
-        probe.abort();
-        m_readyTimer.stop();
-        setState(Running);
-        emit ready();
-        return;
+    // Try both loopback families: the engine brings up one inbound per family and, when
+    // the machine prefers IPv6, the v4 listener can lag or be absent entirely. Probing only
+    // 127.0.0.1 would then report "never became ready" for a working tunnel.
+    for (const QHostAddress &loopback : {QHostAddress(QHostAddress::LocalHost),
+                                         QHostAddress(QHostAddress::LocalHostIPv6)}) {
+        QTcpSocket probe;
+        probe.connectToHost(loopback, m_proxyPort);
+        if (probe.waitForConnected(150)) {
+            probe.abort();
+            m_readyTimer.stop();
+            setState(Running);
+            emit ready();
+            return;
+        }
     }
 
     if (++m_readyAttempts >= kReadyMaxAttempts) {
         m_readyTimer.stop();
         m_lastError = QStringLiteral(
-                          "The VPN engine started but never opened its control port (%1). "
-                          "Last output:\n%2")
-                          .arg(m_clashApiPort)
+                          "The VPN engine started but never opened its proxy port (%1), so "
+                          "no traffic could go through it. Last output:\n%2")
+                          .arg(m_proxyPort)
                           .arg(m_stderrTail.trimmed());
         stop();
         setState(Failed);

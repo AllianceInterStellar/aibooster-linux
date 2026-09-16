@@ -108,6 +108,10 @@ public:
     /// pointed at, so it must agree with m_mixedPort's initialiser below.
     static constexpr int kDefaultMixedPort = 2334;
 
+    /// The engine's own default outbound re-test interval, in seconds. Written explicitly
+    /// because an omitted field reaches the engine as 0, not as "use your default".
+    static constexpr int kDefaultUrlTestIntervalSeconds = 600;
+
     static quint16 clashApiPort() { return 18756; }
     static QString clashApiSecret() { return QStringLiteral("aibooster-clash-api"); }
 

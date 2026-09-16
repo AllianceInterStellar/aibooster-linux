@@ -141,6 +141,15 @@ if(AIBOOSTER_BUILD_TESTS)
     target_link_libraries(test_coreprocess PRIVATE Qt6::Test Qt6::Network)
     add_test(NAME coreprocess COMMAND test_coreprocess)
 
+    # SettingsModel pulls in QML registration macros, so the test links Quick.
+    qt_add_executable(test_enginesettings
+        tests/test_enginesettings.cpp
+        src/models/settingsmodel.cpp
+        src/models/settingsmodel.h
+    )
+    target_link_libraries(test_enginesettings PRIVATE Qt6::Test Qt6::Quick)
+    add_test(NAME enginesettings COMMAND test_enginesettings)
+
     qt_add_executable(test_systemproxy
         tests/test_systemproxy.cpp
         src/platform/SystemProxy.cpp

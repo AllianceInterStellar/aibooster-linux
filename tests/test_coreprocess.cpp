@@ -29,7 +29,7 @@ QString writeScript(const QDir &dir, const QString &name, const QString &body)
     return path;
 }
 
-constexpr quint16 kTestClashPort = 39751;
+constexpr quint16 kTestProxyPort = 39751;
 
 } // namespace
 
@@ -42,7 +42,8 @@ private slots:
 
     void locateBinaryHonoursEnvironmentOverride();
     void missingBinaryFailsWithTheSearchedPaths();
-    void readyOnlyAfterTheControlPortIsOpen();
+    void readyOnlyAfterTheProxyPortIsOpen();
+    void readyWhenTheEngineBindsOnlyIPv6Loopback();
     void stopTerminatesTheEngine();
     void engineExitingEarlyIsReportedAsFailure();
 
@@ -93,7 +94,7 @@ void TestCoreProcess::missingBinaryFailsWithTheSearchedPaths()
 
     CoreProcess core;
     QSignalSpy failed(&core, &CoreProcess::failed);
-    core.start(m_configPath, m_settingsPath, kTestClashPort);
+    core.start(m_configPath, m_settingsPath, kTestProxyPort);
 
     QCOMPARE(failed.count(), 1);
     QCOMPARE(core.state(), CoreProcess::Failed);
@@ -107,7 +108,7 @@ void TestCoreProcess::missingBinaryFailsWithTheSearchedPaths()
     qunsetenv("AIBOOSTER_CORE");
 }
 
-void TestCoreProcess::readyOnlyAfterTheControlPortIsOpen()
+void TestCoreProcess::readyOnlyAfterTheProxyPortIsOpen()
 {
     // The stub stays alive but does not bind the port for the first two seconds. A
     // supervisor that equates "process started" with "engine ready" passes this test at
@@ -121,7 +122,7 @@ void TestCoreProcess::readyOnlyAfterTheControlPortIsOpen()
                        "s.bind(('127.0.0.1',%1));s.listen(5);\n"
                        "print('listening',flush=True)\n"
                        "time.sleep(60)\"\n")
-            .arg(kTestClashPort));
+            .arg(kTestProxyPort));
     QVERIFY(!stub.isEmpty());
     qputenv("AIBOOSTER_CORE", stub.toUtf8());
 
@@ -129,7 +130,7 @@ void TestCoreProcess::readyOnlyAfterTheControlPortIsOpen()
     QSignalSpy ready(&core, &CoreProcess::ready);
     QSignalSpy failed(&core, &CoreProcess::failed);
 
-    core.start(m_configPath, m_settingsPath, kTestClashPort);
+    core.start(m_configPath, m_settingsPath, kTestProxyPort);
 
     // Not ready while the port is still closed.
     QTest::qWait(700);
@@ -144,6 +145,32 @@ void TestCoreProcess::readyOnlyAfterTheControlPortIsOpen()
     qunsetenv("AIBOOSTER_CORE");
 }
 
+void TestCoreProcess::readyWhenTheEngineBindsOnlyIPv6Loopback()
+{
+    // The real engine brings up one inbound per address family, and the v4 listener can be
+    // absent or lag behind. A probe that only tries 127.0.0.1 reports "never became ready"
+    // for a tunnel that is up and carrying traffic — so bind ::1 alone and require success.
+    const quint16 port = kTestProxyPort + 5;
+    const QString stub = writeScript(
+        QDir(m_dir.path()), QStringLiteral("v6-core"),
+        QStringLiteral("#!/bin/sh\n"
+                       "exec python3 -c \"import socket,time;"
+                       "s=socket.socket(socket.AF_INET6);"
+                       "s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
+                       "s.bind(('::1',%1));s.listen(5);time.sleep(120)\"\n")
+            .arg(port));
+    QVERIFY(!stub.isEmpty());
+    qputenv("AIBOOSTER_CORE", stub.toUtf8());
+
+    CoreProcess core;
+    QSignalSpy ready(&core, &CoreProcess::ready);
+    core.start(m_configPath, m_settingsPath, port);
+    QVERIFY2(ready.wait(15000), "an IPv6-only proxy inbound was not detected as ready");
+
+    core.stop();
+    qunsetenv("AIBOOSTER_CORE");
+}
+
 void TestCoreProcess::stopTerminatesTheEngine()
 {
     const QString stub = writeScript(
@@ -152,12 +179,12 @@ void TestCoreProcess::stopTerminatesTheEngine()
                        "exec python3 -c \"import socket,time;"
                        "s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
                        "s.bind(('127.0.0.1',%1));s.listen(5);time.sleep(120)\"\n")
-            .arg(kTestClashPort + 1));
+            .arg(kTestProxyPort + 1));
     qputenv("AIBOOSTER_CORE", stub.toUtf8());
 
     CoreProcess core;
     QSignalSpy ready(&core, &CoreProcess::ready);
-    core.start(m_configPath, m_settingsPath, kTestClashPort + 1);
+    core.start(m_configPath, m_settingsPath, kTestProxyPort + 1);
     QVERIFY(ready.wait(15000));
 
     core.stop();
@@ -166,8 +193,8 @@ void TestCoreProcess::stopTerminatesTheEngine()
     // The port must be free afterwards; an orphaned engine would hold it and the next
     // connection attempt would fail to bind.
     QTcpServer rebind;
-    QVERIFY2(rebind.listen(QHostAddress::LocalHost, kTestClashPort + 1),
-             "the stub engine outlived stop() and is still holding the control port");
+    QVERIFY2(rebind.listen(QHostAddress::LocalHost, kTestProxyPort + 1),
+             "the stub engine outlived stop() and is still holding the proxy port");
     qunsetenv("AIBOOSTER_CORE");
 }
 
@@ -184,7 +211,7 @@ void TestCoreProcess::engineExitingEarlyIsReportedAsFailure()
     CoreProcess core;
     QSignalSpy failed(&core, &CoreProcess::failed);
     QSignalSpy ready(&core, &CoreProcess::ready);
-    core.start(m_configPath, m_settingsPath, kTestClashPort + 2);
+    core.start(m_configPath, m_settingsPath, kTestProxyPort + 2);
 
     QVERIFY(failed.wait(10000));
     QCOMPARE(ready.count(), 0);
