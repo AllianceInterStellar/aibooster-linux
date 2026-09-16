@@ -42,10 +42,13 @@ Rectangle {
                     font.weight: Font.Medium
                     color: "#E5E7EB"
                 }
-                Text {
+                Image {
                     visible: tile.isPremium
-                    text: "👑"
-                    font.pixelSize: 12
+                    source: "../icons/crown.svg"
+                    sourceSize.width: 13
+                    sourceSize.height: 13
+                    width: 13
+                    height: 13
                 }
             }
 

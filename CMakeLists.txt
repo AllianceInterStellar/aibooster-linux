@@ -15,8 +15,13 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 include(GNUInstallDirs)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickControls2 Network)
-qt_standard_project_setup(REQUIRES 6.4)
+# 6.2, not 6.4: Ubuntu 22.04 LTS ships Qt 6.2 and is supported until 2027. Verified
+# building and running there — see README.
+find_package(Qt6 6.2 REQUIRED COMPONENTS Quick QuickControls2 Network)
+# qt_standard_project_setup() only exists from Qt 6.3.
+if(COMMAND qt_standard_project_setup)
+    qt_standard_project_setup()
+endif()
 
 # The subscription payload is AES-256-GCM; we decrypt it with OpenSSL's EVP interface.
 find_package(OpenSSL REQUIRED)
@@ -89,6 +94,15 @@ qt_add_qml_module(aibooster
         qml/screens/settings/WarpSettings.qml
     RESOURCES
         packaging/aibooster.svg
+        qml/icons/home.svg
+        qml/icons/proxies.svg
+        qml/icons/profiles.svg
+        qml/icons/settings.svg
+        qml/icons/logs.svg
+        qml/icons/about.svg
+        qml/icons/shield.svg
+        qml/icons/shield-check.svg
+        qml/icons/crown.svg
 )
 
 target_compile_definitions(aibooster PRIVATE

@@ -15,12 +15,15 @@ ApplicationWindow {
     property int currentIndex: 0
 
     readonly property var navItems: [
-        { icon: "🏠", label: "Home" },
-        { icon: "🌐", label: "Proxies" },
-        { icon: "📋", label: "Profiles" },
-        { icon: "⚙️", label: "Settings" },
-        { icon: "📜", label: "Logs" },
-        { icon: "ℹ️", label: "About" }
+        // Vector icons shipped in the binary, not emoji. Emoji live in the astral plane and
+        // a minimal Linux install has no font covering them, so the whole navigation bar
+        // rendered as empty boxes on Ubuntu 22.04 — verified, not theoretical.
+        { icon: "icons/home.svg", label: "Home" },
+        { icon: "icons/proxies.svg", label: "Proxies" },
+        { icon: "icons/profiles.svg", label: "Profiles" },
+        { icon: "icons/settings.svg", label: "Settings" },
+        { icon: "icons/logs.svg", label: "Logs" },
+        { icon: "icons/about.svg", label: "About" }
     ]
 
     RowLayout {
@@ -69,10 +72,16 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             spacing: 2
 
-                            Text {
+                            Image {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: modelData.icon
-                                font.pixelSize: 18
+                                source: modelData.icon
+                                // Rasterise at the displayed size; an SVG scaled after the
+                                // fact renders blurry on HiDPI.
+                                sourceSize.width: 20
+                                sourceSize.height: 20
+                                width: 20
+                                height: 20
+                                opacity: root.currentIndex === index ? 1.0 : 0.62
                             }
 
                             Text {

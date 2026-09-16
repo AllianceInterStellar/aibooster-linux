@@ -33,10 +33,13 @@ Rectangle {
             radius: 20
             color: tile.isActive ? "#7C3AED" : "#1F1B3D"
 
-            Text {
+            Image {
                 anchors.centerIn: parent
-                text: tile.isPremium ? "👑" : "📋"
-                font.pixelSize: 18
+                source: tile.isPremium ? "../icons/crown.svg" : "../icons/profiles.svg"
+                sourceSize.width: 20
+                sourceSize.height: 20
+                width: 20
+                height: 20
             }
         }
 

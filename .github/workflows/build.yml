@@ -46,7 +46,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             qml6-module-qtquick qml6-module-qtquick-window \
             qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtquick-templates qml6-module-qtqml-workerscript
+            qml6-module-qtquick-templates qml6-module-qtqml-workerscript \
+            libqt6svg6
           # The pass condition is the EXIT CODE, not a log pattern. main() wires
           # objectCreationFailed to exit(-1), so a QML failure makes the process die at
           # once; a healthy app runs until timeout kills it, which is exit 124. Grepping

@@ -97,9 +97,16 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "SettingsModel", settings);
 
     const QUrl url(QStringLiteral("qrc:/AiBooster/qml/Main.qml"));
+    // objectCreated + null check rather than objectCreationFailed, which is Qt 6.4+ and
+    // would lock out Ubuntu 22.04 (Qt 6.2), supported until 2027. Same effect: a QML failure
+    // exits non-zero, which is what CI's start-up check keys on.
     QObject::connect(
-        &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
-        []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
+        &engine, &QQmlApplicationEngine::objectCreated, &app,
+        [url](QObject *object, const QUrl &objectUrl) {
+            if (!object && url == objectUrl)
+                QCoreApplication::exit(-1);
+        },
+        Qt::QueuedConnection);
     engine.load(url);
 
     const int rc = app.exec();

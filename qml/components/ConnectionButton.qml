@@ -59,10 +59,13 @@ Item {
             anchors.centerIn: parent
             spacing: 4
 
-            Text {
+            Image {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: isConnected ? "🛡️ ✓" : "🛡️"
-                font.pixelSize: 32
+                source: isConnected ? "../icons/shield-check.svg" : "../icons/shield.svg"
+                sourceSize.width: 34
+                sourceSize.height: 34
+                width: 34
+                height: 34
             }
 
             Text {
