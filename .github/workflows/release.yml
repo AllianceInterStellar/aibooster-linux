@@ -1,0 +1,111 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (created if absent)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Built on the oldest release we support, so the packages install on 22.04 and
+          # everything newer. Native runners for both architectures — cross-compiling Qt
+          # is far more trouble than asking for the right machine.
+          - { runner: ubuntu-22.04,     arch: amd64, goarch: amd64 }
+          - { runner: ubuntu-22.04-arm, arch: arm64, goarch: arm64 }
+
+    runs-on: ${{ matrix.runner }}
+    name: ${{ matrix.arch }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build dpkg-dev \
+            qt6-base-dev qt6-declarative-dev libqt6opengl6-dev \
+            libgl1-mesa-dev libqt6svg6 libssl-dev
+
+      - name: Build the client
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAIBOOSTER_BUILD_TESTS=OFF
+          cmake --build build --parallel
+          file build/aibooster
+
+      - name: Stage
+        run: DESTDIR="$PWD/pkgroot" cmake --install build --prefix /usr
+
+      - name: Package .deb
+        run: bash packaging/build-deb.sh "$PWD/pkgroot"
+
+      - name: Portable tarball
+        run: |
+          # For distributions whose package names differ from Debian's. Same binary, no
+          # dependency metadata — the reader installs Qt themselves.
+          VERSION="$(sed -n 's/^project(AiBoosterLinux VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+          DIR="aibooster-${VERSION}-linux-${{ matrix.arch }}"
+          mkdir -p "dist/$DIR"
+          cp -a pkgroot/usr/bin/aibooster "dist/$DIR/"
+          cp -a packaging/io.allianceinterstellar.AiBooster.desktop packaging/aibooster.svg \
+                README.md NOTICE.md LICENSE "dist/$DIR/"
+          tar -C dist -czf "dist/$DIR.tar.gz" "$DIR"
+          rm -rf "dist/$DIR"
+          ls -l dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name '*.deb' -o -name '*.tar.gz' \) -exec cp {} dist/ \;
+          cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          cat > notes.md <<'NOTES'
+          Linux desktop client, x86-64 and arm64.
+
+          **The tunnelling engine is not included.** This package is the user interface; the
+          engine is a separate program under a different licence. See README.md, section
+          "The engine", for where to get or build one, and NOTICE.md for the licensing.
+
+          The `.deb` packages are built on Ubuntu 22.04 and install on 22.04 and newer. The
+          tarballs are the same binary without dependency metadata, for other distributions.
+          NOTES
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "AI Booster for Linux $TAG" \
+              --notes-file notes.md
+          fi
