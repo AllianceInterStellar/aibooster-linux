@@ -54,7 +54,19 @@ fi
 # too tight a floor, and the Qt 6 ABI is stable across the 6.x a given release ships.
 # paste -d takes a *cycling list* of delimiters, so -d', ' alternates comma and space and
 # produces "a,b c,d" — which dpkg rejects as a syntax error. One delimiter, then space it.
-DEPENDS="$(printf '%s\n' "${PKGS[@]}" | sort -u | paste -sd, - | sed 's/,/, /g')"
+#
+# Each library also gets a "| <name>t64" alternative. Ubuntu 24.04's 64-bit time_t
+# transition renamed every one of these (libqt6core6 -> libqt6core6t64), so a package built
+# on 22.04 is uninstallable there without it. dpkg takes the first alternative that exists,
+# so listing both makes one package serve both releases.
+declare -a DEPLIST=()
+while read -r pkg; do
+    case "$pkg" in
+        lib*[0-9]) DEPLIST+=("$pkg | ${pkg}t64") ;;
+        *)         DEPLIST+=("$pkg") ;;
+    esac
+done < <(printf '%s\n' "${PKGS[@]}" | sort -u)
+DEPENDS="$(printf '%s\n' "${DEPLIST[@]}" | paste -sd, - | sed 's/,/, /g')"
 # QML modules are resolved by name at runtime, so they appear in no linker record and the
 # ldd walk above cannot see them. Missing these produces a window that opens blank.
 # libqt6svg6 carries the SVG image-format plugin. The navigation icons are SVG, and a
