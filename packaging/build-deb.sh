@@ -30,12 +30,31 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -a "$PKGROOT/." "$STAGE/"
 mkdir -p "$STAGE/DEBIAN"
 
-# Let dpkg-shlibdeps work out the real Qt/OpenSSL dependencies from the binary rather than
-# hand-maintaining a list that silently rots when Qt is upgraded.
-DEPENDS="$(cd "$STAGE" && dpkg-shlibdeps -O --ignore-missing-info usr/bin/aibooster 2>/dev/null \
-    | sed 's/^shlibs:Depends=//')"
-# The QML modules are loaded by name at runtime, so no linker records them and
-# dpkg-shlibdeps cannot see them. Missing these produces a window that opens blank.
+# Derive the shared-library dependencies from the binary rather than hand-maintaining a
+# list that silently rots when Qt is upgraded.
+#
+# Not dpkg-shlibdeps: it insists on a debian/control relative to the working directory and
+# exits 25 without one, which is not a shape that fits building from a staging tree. Asking
+# the dynamic linker what the binary actually loads, then asking dpkg which package owns
+# each of those files, gets the same answer from the same source of truth.
+declare -a PKGS=()
+while read -r lib; do
+    [ -n "$lib" ] || continue
+    resolved="$(readlink -f "$lib")"
+    owner="$(dpkg -S "$resolved" 2>/dev/null | head -1 | cut -d: -f1)"
+    [ -n "$owner" ] && PKGS+=("$owner")
+done < <(ldd "$STAGE/usr/bin/aibooster" | awk '/=>/ && $3 ~ /^\// {print $3}')
+
+if [ ${#PKGS[@]} -eq 0 ]; then
+    echo "Could not resolve any library dependencies for usr/bin/aibooster" >&2
+    exit 1
+fi
+
+# Package names without version bounds: the build machine's exact versions would be far
+# too tight a floor, and the Qt 6 ABI is stable across the 6.x a given release ships.
+DEPENDS="$(printf '%s\n' "${PKGS[@]}" | sort -u | paste -sd', ' -)"
+# QML modules are resolved by name at runtime, so they appear in no linker record and the
+# ldd walk above cannot see them. Missing these produces a window that opens blank.
 QML_DEPENDS="qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates"
 
 cat > "$STAGE/DEBIAN/control" <<CONTROL
