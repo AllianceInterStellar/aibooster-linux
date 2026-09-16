@@ -52,7 +52,9 @@ fi
 
 # Package names without version bounds: the build machine's exact versions would be far
 # too tight a floor, and the Qt 6 ABI is stable across the 6.x a given release ships.
-DEPENDS="$(printf '%s\n' "${PKGS[@]}" | sort -u | paste -sd', ' -)"
+# paste -d takes a *cycling list* of delimiters, so -d', ' alternates comma and space and
+# produces "a,b c,d" — which dpkg rejects as a syntax error. One delimiter, then space it.
+DEPENDS="$(printf '%s\n' "${PKGS[@]}" | sort -u | paste -sd, - | sed 's/,/, /g')"
 # QML modules are resolved by name at runtime, so they appear in no linker record and the
 # ldd walk above cannot see them. Missing these produces a window that opens blank.
 QML_DEPENDS="qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates"
