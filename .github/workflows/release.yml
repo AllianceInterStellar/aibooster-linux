@@ -44,8 +44,42 @@ jobs:
           cmake --build build --parallel
           file build/aibooster
 
+      # The engine is a separate GPL-3.0 program. Its source is not in this repository, but
+      # it is published — as the corresponding source for the binaries we hand out, which
+      # GPL-3.0 requires of us. Building it here is what makes the packages work on install.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.1"
+          cache: false
+
+      - name: Build the engine
+        env:
+          # Pinned: Go will otherwise honour a toolchain directive and silently fetch a
+          # newer compiler, and a vendored TLS package asserts at init that its struct
+          # layout matches crypto/tls — an assertion that is specific to one Go version.
+          GOTOOLCHAIN: go1.26.1
+        run: |
+          git clone --depth 1 https://github.com/AllianceInterStellar/aibooster-engine.git engine-src
+          cd engine-src
+          go version
+          # Tags read off the shipped binaries with `go version -m`, not copied from the
+          # Makefile — the two disagree. with_naive_outbound is omitted deliberately: it
+          # links a prebuilt libcronet.a using CREL relocations that the binutils on this
+          # runner cannot read.
+          TAGS='with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_grpc,with_awg,tfogo_checklinkname0,with_conntrack,with_dhcp'
+          go build -trimpath -ldflags="-w -s -checklinkname=0 -buildid=" -tags "$TAGS" \
+            -o ../aibooster-core ./cmd/main
+          cd ..
+          file aibooster-core
+          # An engine that cannot start must never reach a release. Built with the wrong
+          # toolchain it panics before main(), which `version` surfaces immediately.
+          ./aibooster-core version
+
       - name: Stage
-        run: DESTDIR="$PWD/pkgroot" cmake --install build --prefix /usr
+        run: |
+          DESTDIR="$PWD/pkgroot" cmake --install build --prefix /usr
+          install -Dm755 aibooster-core "$PWD/pkgroot/usr/libexec/aibooster/aibooster-core"
+          find pkgroot -type f | sort
 
       - name: Package .deb
         run: bash packaging/build-deb.sh "$PWD/pkgroot"
@@ -58,6 +92,7 @@ jobs:
           DIR="aibooster-${VERSION}-linux-${{ matrix.arch }}"
           mkdir -p "dist/$DIR"
           cp -a pkgroot/usr/bin/aibooster "dist/$DIR/"
+          cp -a aibooster-core "dist/$DIR/"
           cp -a packaging/io.allianceinterstellar.AiBooster.desktop packaging/aibooster.svg \
                 README.md NOTICE.md LICENSE "dist/$DIR/"
           tar -C dist -czf "dist/$DIR.tar.gz" "$DIR"
@@ -91,11 +126,13 @@ jobs:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           cat > notes.md <<'NOTES'
-          Linux desktop client, x86-64 and arm64.
+          Linux desktop client, x86-64 and arm64. Ready to run — the tunnelling engine is
+          included.
 
-          **The tunnelling engine is not included.** This package is the user interface; the
-          engine is a separate program under a different licence. See README.md, section
-          "The engine", for where to get or build one, and NOTICE.md for the licensing.
+          The engine is a separate GPL-3.0 program, installed as
+          `/usr/libexec/aibooster/aibooster-core`. Its corresponding source is
+          [aibooster-engine](https://github.com/AllianceInterStellar/aibooster-engine), and
+          this release's copy was built from it by the workflow that produced these files.
 
           The `.deb` packages are built on Ubuntu 22.04 and install on 22.04 and newer. The
           tarballs are the same binary without dependency metadata, for other distributions.
