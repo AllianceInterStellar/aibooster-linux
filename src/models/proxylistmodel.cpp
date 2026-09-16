@@ -838,9 +838,16 @@ void ProxyFilterModel::setFilterText(const QString &text)
 {
     if (m_filterText == text)
         return;
+    // begin/endFilterChange() is Qt 6.7+; on the 6.4 that current LTS distributions ship,
+    // invalidateFilter() is the equivalent. Mirrors LogFilterModel.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
     beginFilterChange();
     m_filterText = text;
     endFilterChange();
+#else
+    m_filterText = text;
+    invalidateFilter();
+#endif
     emit filterTextChanged();
     emit countChanged();
 }
