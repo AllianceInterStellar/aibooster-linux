@@ -91,11 +91,57 @@ Item {
             color: "#6B7280"
         }
 
+        // Upstream attribution. GPL-3.0 section 7 requires the engine's authors be credited,
+        // the licence be reachable, and modification be stated — so this is not decoration
+        // and must not be trimmed to make the screen tidier. It replaced a bare
+        // "Based on Hiddify", which named the project but met none of those obligations.
+        Item { Layout.preferredHeight: 8 }
+
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "Based on Hiddify"
+            text: "Open source"
             font.pixelSize: 12
+            font.weight: Font.Medium
+            color: "#6B7280"
+        }
+
+        Text {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.maximumWidth: 420
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: "This client is GPL-3.0. Its tunnelling engine is built from hiddify-core "
+                  + "and sing-box, rebuilt and renamed by us; the engine itself is unmodified, "
+                  + "and it runs as a separate process rather than being linked into this app."
+            font.pixelSize: 11
+            lineHeight: 1.25
             color: "#4B5563"
+        }
+
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 14
+
+            LegalLink {
+                text: "GPL-3.0"
+                url: "https://www.gnu.org/licenses/gpl-3.0.html"
+                font.pixelSize: 11
+            }
+            LegalLink {
+                text: "hiddify-core"
+                url: "https://github.com/hiddify/hiddify-core"
+                font.pixelSize: 11
+            }
+            LegalLink {
+                text: "sing-box"
+                url: "https://github.com/SagerNet/sing-box"
+                font.pixelSize: 11
+            }
+            LegalLink {
+                text: "This client"
+                url: "https://github.com/AllianceInterStellar/aibooster-linux"
+                font.pixelSize: 11
+            }
         }
     }
 

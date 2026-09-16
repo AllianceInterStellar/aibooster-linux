@@ -217,7 +217,7 @@ void VpnCore::launchEngine(const QString &configContent)
 
     SettingsModel *settings = SettingsModel::instance();
     QJsonObject engineSettings =
-        QJsonDocument::fromJson(settings ? settings->buildHiddifySettingsJson() : QByteArray("{}"))
+        QJsonDocument::fromJson(settings ? settings->buildEngineSettingsJson() : QByteArray("{}"))
             .object();
 
     // We drive the desktop's proxy ourselves rather than letting the engine do it. The

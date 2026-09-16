@@ -41,7 +41,7 @@ void TestEngineSettings::initTestCase()
 
 QJsonObject TestEngineSettings::build() const
 {
-    const QByteArray json = m_settings->buildHiddifySettingsJson();
+    const QByteArray json = m_settings->buildEngineSettingsJson();
     QJsonParseError error{};
     const QJsonDocument doc = QJsonDocument::fromJson(json, &error);
     Q_ASSERT(error.error == QJsonParseError::NoError);

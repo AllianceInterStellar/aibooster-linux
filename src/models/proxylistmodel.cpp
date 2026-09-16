@@ -220,7 +220,7 @@ QString detectCountryCode(const QString &name)
     if (!flag.isEmpty())
         return flag;
 
-    // Hiddify-style tags look like "🇺🇸 1 - US - VLESS/WS/TLS - 443 § 0".
+    // The engine's outbound tags look like "\U0001F1FA\U0001F1F8 1 - US - VLESS/WS/TLS - 443 \u00A7 0".
     static const QRegularExpression dashed(QStringLiteral(" - ([A-Z]{2}) - "));
     const auto dashedMatch = dashed.match(name);
     if (dashedMatch.hasMatch() && dashedMatch.captured(1) != QLatin1String("XX"))

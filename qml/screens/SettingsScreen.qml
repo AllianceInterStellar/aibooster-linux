@@ -269,7 +269,7 @@ Item {
                     SettingsToggle { label: "TUN Mode"; checked: SettingsModel.tunMode; onToggled: SettingsModel.tunMode = checked }
                     SettingsToggle { label: "Auto Connect"; checked: SettingsModel.autoConnect; onToggled: SettingsModel.autoConnect = checked }
                     // No "Per-App Proxy" here: per-process routing would have to go through
-                    // HiddifyOptions.rules, and that whole branch is commented out in this
+                    // the engine's HiddifyOptions.rules, and that whole branch is commented out in this
                     // core build, so the switch could only ever have been decorative.
                     SettingsToggle { label: "Enable IPv6"; checked: SettingsModel.enableIPv6; onToggled: SettingsModel.enableIPv6 = checked }
                 }

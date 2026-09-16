@@ -11,7 +11,7 @@ Item {
         color: "#080620"
     }
 
-    // Every entry maps onto a key hiddify-core actually reads (v2/config/hiddify_option.go),
+    // Every entry maps onto a key the engine actually reads (v2/config/hiddify_option.go),
     // so what is picked here changes the config the core builds on the next connect.
     readonly property var regions: [
         { id: "other", label: "Other", desc: "No country-specific direct rules" },

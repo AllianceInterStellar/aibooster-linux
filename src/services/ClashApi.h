@@ -9,7 +9,7 @@
 
 class QNetworkRequest;
 
-/// Thin client for the clash API hiddify-core exposes for as long as the tunnel runs
+/// Thin client for the clash API the engine exposes for as long as the tunnel runs
 /// (experimental.clash_api in the config it builds). It is the only way the app can see what
 /// the core is actually doing — byte counters, and which node the "select" group points at.
 ///

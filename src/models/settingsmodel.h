@@ -115,9 +115,10 @@ public:
     static quint16 clashApiPort() { return 18756; }
     static QString clashApiSecret() { return QStringLiteral("aibooster-clash-api"); }
 
-    /// hiddify-core options JSON. Keys verified against hiddify-core v2/config/hiddify_option.go;
+    /// The engine's options JSON. Key names verified against the engine's own
+    /// v2/config/hiddify_option.go (upstream hiddify-core);
     /// the core MERGES this onto its defaults, so omitting a key keeps the sensible default.
-    QByteArray buildHiddifySettingsJson() const;
+    QByteArray buildEngineSettingsJson() const;
 
     /// "<min>-<max>", min <= max — the only shape config.TLSTricks parses.
     static bool isValidRange(const QString &v);
