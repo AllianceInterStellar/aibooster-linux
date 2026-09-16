@@ -44,43 +44,8 @@ jobs:
           cmake --build build --parallel
           file build/aibooster
 
-      # The engine is a separate GPL-3.0 program. We do not keep its source here, so it is
-      # built from the upstream release, unmodified, and shipped under our own binary name —
-      # which is what NOTICE.md says we do. Pinned to a tag so a release is reproducible.
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26.1"
-          cache: false
-
-      - name: Build the engine
-        env:
-          ENGINE_TAG: v4.1.0
-        run: |
-          # One submodule is declared with an SSH URL, which cannot be cloned anonymously.
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git clone --depth 1 --branch "$ENGINE_TAG" --recurse-submodules --shallow-submodules \
-            https://github.com/hiddify/hiddify-core.git engine-src
-
-          cd engine-src
-          export GOFLAGS=-trimpath
-          # Tags read off the shipped binaries with `go version -m`, not copied from the
-          # Makefile — the two disagree. with_naive_outbound is omitted deliberately: it
-          # links a prebuilt libcronet.a using CREL relocations, which the binutils on this
-          # runner cannot read.
-          TAGS='with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_grpc,with_awg,tfogo_checklinkname0,with_conntrack,with_dhcp'
-          go build -ldflags="-w -s -checklinkname=0 -buildid=" -tags "$TAGS" \
-            -o ../aibooster-core ./cmd/main
-          cd ..
-          file aibooster-core
-          # Refuse to ship an engine that cannot start: older Go toolchains produce a binary
-          # that panics in a vendored TLS package before main().
-          ./aibooster-core version
-
       - name: Stage
-        run: |
-          DESTDIR="$PWD/pkgroot" cmake --install build --prefix /usr
-          install -Dm755 aibooster-core "$PWD/pkgroot/usr/libexec/aibooster/aibooster-core"
-          find pkgroot -type f | sort
+        run: DESTDIR="$PWD/pkgroot" cmake --install build --prefix /usr
 
       - name: Package .deb
         run: bash packaging/build-deb.sh "$PWD/pkgroot"
@@ -93,7 +58,6 @@ jobs:
           DIR="aibooster-${VERSION}-linux-${{ matrix.arch }}"
           mkdir -p "dist/$DIR"
           cp -a pkgroot/usr/bin/aibooster "dist/$DIR/"
-          cp -a aibooster-core "dist/$DIR/"
           cp -a packaging/io.allianceinterstellar.AiBooster.desktop packaging/aibooster.svg \
                 README.md NOTICE.md LICENSE "dist/$DIR/"
           tar -C dist -czf "dist/$DIR.tar.gz" "$DIR"
@@ -127,13 +91,11 @@ jobs:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           cat > notes.md <<'NOTES'
-          Linux desktop client, x86-64 and arm64. Ready to run: the tunnelling engine is
-          included.
+          Linux desktop client, x86-64 and arm64.
 
-          The engine is a separate GPL-3.0 program, built unmodified from
-          [hiddify-core v4.1.0](https://github.com/hiddify/hiddify-core/tree/v4.1.0) and its
-          submodules, and installed as `/usr/libexec/aibooster/aibooster-core`. See NOTICE.md
-          for the licensing and for where its source is.
+          **The tunnelling engine is not included.** This package is the user interface; the
+          engine is a separate program under a different licence. See README.md, section
+          "The engine", for where to get or build one, and NOTICE.md for the licensing.
 
           The `.deb` packages are built on Ubuntu 22.04 and install on 22.04 and newer. The
           tarballs are the same binary without dependency metadata, for other distributions.

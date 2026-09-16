@@ -2,19 +2,12 @@
 
 ## The tunnelling engine
 
-This client never links or embeds a tunnelling engine. It launches a separate engine
-program and communicates with it over loopback sockets (the Clash API and the engine's
-local mixed inbound). No engine code is compiled into this application, and no engine
-source or binary is kept in this repository.
+This client does not contain, link, or redistribute a tunnelling engine. It launches a
+separate engine program and communicates with it over loopback sockets (the Clash API and
+the engine's local mixed inbound). No engine code is compiled into this application and no
+engine binary is shipped in this repository or in the packages built from it.
 
-**The release packages do redistribute an engine binary**, at
-`/usr/libexec/aibooster/aibooster-core`, so that they work out of the box. It is built by
-this repository's release workflow from the pinned upstream tag below, unmodified, and
-renamed. The corresponding source is that tag and its submodules — the same commit the
-workflow clones, so anyone can reproduce the binary from it. A build made from this
-repository alone contains no engine.
-
-The engine is derived from:
+The engine AI Booster uses in its official builds is derived from:
 
 - **hiddify-core** — https://github.com/hiddify/hiddify-core — GPL-3.0 with additional
   terms under GPL-3.0 section 7.
@@ -26,13 +19,15 @@ Full licence text: https://www.gnu.org/licenses/gpl-3.0.html
 target; the exact flags, and the two toolchain constraints that bite, are in
 [README.md → The engine](README.md#the-engine). The result is a drop-in `aibooster-core`.
 
-**Modifications.** The engine is rebuilt from the sources above at tag **v4.1.0**, which is
-what `.github/workflows/release.yml` clones. Its behaviour is unmodified; the build renames
-the shipped binary so the product does not carry upstream's branding, which upstream's
-additional terms require of forks distributed through application stores. One build tag is
-omitted — `with_naive_outbound`, because it links a prebuilt library using relocations the
-build runner's binutils cannot read — so the naive protocol is absent. Nothing in this
-repository is derived from hiddify-core or sing-box.
+**Modifications.** AI Booster's official engine builds are produced from the projects above
+and renamed, so the product does not carry upstream's branding — which upstream's additional
+terms require of forks distributed through application stores. Those builds are made from a
+tree that carries changes of our own, so they are not a plain rebuild of the tagged upstream
+sources; the corresponding source for any engine binary we distribute is available on
+request from the address in this file.
+
+Nothing in this repository is derived from hiddify-core or sing-box, and no engine source or
+binary is kept here.
 
 ## This client
 

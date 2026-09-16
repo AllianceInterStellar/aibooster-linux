@@ -4,13 +4,9 @@ The Linux desktop client for the [AI Booster](https://allianceinterstellar.com) 
 written in Qt 6 / QML.
 
 **This repository is the user interface only.** The tunnelling engine is a separate program
-under a different licence; its source is not here and it is never linked into this
-application — the client launches it as a child process and talks to it over loopback
-sockets.
-
-The **release packages** do include a prebuilt engine, so they work out of the box. A build
-made from this source tree does not; you supply the engine yourself, as described below.
-See [NOTICE.md](NOTICE.md) for the licensing and the engine's source.
+under a different licence; it is not contained here, not linked into this application, and
+not shipped in the packages built from this source. The client launches the engine as a
+child process and talks to it over loopback sockets. See [NOTICE.md](NOTICE.md).
 
 ---
 
@@ -124,10 +120,9 @@ The client needs an `aibooster-core` binary at runtime and looks for it, in orde
 4. `/usr/libexec/aibooster/aibooster-core`, `/usr/lib/aibooster/…`, `/usr/local/lib/aibooster/…`
 5. `$PATH`
 
-If it is missing, the client says so and lists exactly where it looked. The `.deb` packages
-on the [Releases page](https://github.com/AllianceInterStellar/aibooster-linux/releases)
-install one at path 4 for you; you can also build one yourself from the engine's upstream
-source — [NOTICE.md](NOTICE.md) says where
+If it is missing, the client says so and lists exactly where it looked. The official engine
+build ships with the [AI Booster downloads](https://allianceinterstellar.com); you can also
+build one yourself from the engine's upstream source — [NOTICE.md](NOTICE.md) says where
 that is and what it is licensed under. The client drives it through its standard
 `run -c <config> -d <settings>` interface:
 
