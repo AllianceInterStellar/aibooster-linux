@@ -122,8 +122,9 @@ The client needs an `aibooster-core` binary at runtime and looks for it, in orde
 
 If it is missing, the client says so and lists exactly where it looked. The official engine
 build ships with the [AI Booster downloads](https://allianceinterstellar.com); you can also
-build one yourself from [hiddify-core](https://github.com/hiddify/hiddify-core) — the client
-drives it through its standard `run -c <config> -d <settings>` interface:
+build one yourself from the engine's upstream source — [NOTICE.md](NOTICE.md) says where
+that is and what it is licensed under. The client drives it through its standard
+`run -c <config> -d <settings>` interface:
 
 ```bash
 # Go 1.26.1 specifically: on older toolchains a vendored TLS package asserts the layout of

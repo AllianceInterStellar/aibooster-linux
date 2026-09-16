@@ -15,6 +15,10 @@ The engine AI Booster uses in its official builds is derived from:
 
 Full licence text: https://www.gnu.org/licenses/gpl-3.0.html
 
+**Building the engine yourself.** Clone the first repository above and build its `./cmd/main`
+target; the exact flags, and the two toolchain constraints that bite, are in
+[README.md → The engine](README.md#the-engine). The result is a drop-in `aibooster-core`.
+
 **Modifications.** AI Booster's official engine builds are rebuilt from hiddify-core's
 sources. The engine's behaviour is unmodified; the build renames the shipped binary and its
 library so the product does not carry upstream's branding, which upstream's additional terms
