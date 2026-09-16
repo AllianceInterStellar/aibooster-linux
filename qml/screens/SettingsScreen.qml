@@ -327,7 +327,11 @@ Item {
             spacing: 14
 
             Text {
-                Layout.fillWidth: true
+                // Bound to the dialog's fixed width: a wrapping Text sized by the layout makes
+                // its height depend on a width that depends on the content's height, which
+                // Qt reports as a binding loop and then resolves by guessing.
+                Layout.preferredWidth: loginDialog.availableWidth
+                Layout.maximumWidth: loginDialog.availableWidth
                 text: "This permanently deletes your account, servers, and subscription records. "
                       + "It cannot be undone. Cancel any active subscription first, or deletion "
                       + "will be refused."
@@ -339,7 +343,11 @@ Item {
             // The section's own error label sits BEHIND this modal, so a refusal (e.g. the 409
             // "cancel the active subscription first") must be visible right here.
             Text {
-                Layout.fillWidth: true
+                // Bound to the dialog's fixed width: a wrapping Text sized by the layout makes
+                // its height depend on a width that depends on the content's height, which
+                // Qt reports as a binding loop and then resolves by guessing.
+                Layout.preferredWidth: loginDialog.availableWidth
+                Layout.maximumWidth: loginDialog.availableWidth
                 text: AccountManager.lastError
                 font.pixelSize: 12
                 color: "#F87171"

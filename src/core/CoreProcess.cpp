@@ -9,11 +9,24 @@
 
 namespace {
 
-/// How long we wait for the engine to bind its Clash API before declaring failure.
-/// Cold start on a slow disk is comfortably under two seconds; 20 s is generous without
-/// leaving the UI stuck on "Connecting" for ever if the engine silently dies.
+/// How long we wait for the engine to open its proxy inbound before declaring failure.
+///
+/// 20 s was not enough and shipped a client that could not connect. A real subscription —
+/// fifteen outbounds, WireGuard chains, the engine's own reachability tests — took 28 s to
+/// reach the point of binding, so the client gave up seven seconds early and reported a
+/// failure on a config that works. The engine had done nothing wrong; we simply stopped
+/// waiting first.
+///
+/// Two minutes now. A tunnel that is coming up slowly is still coming up, and the cost of
+/// waiting is a progress line, while the cost of giving up early is a product that appears
+/// broken. A genuinely dead engine does not rely on this timeout to be noticed: the process
+/// exits and handleFinished() reports it immediately.
 constexpr int kReadyPollMs = 250;
-constexpr int kReadyMaxAttempts = 80;
+constexpr int kReadyMaxAttempts = CoreProcess::kReadinessTimeoutMs / kReadyPollMs;
+
+/// How often to tell the user we are still waiting, so a slow start does not look like a
+/// hang. Every four seconds.
+constexpr int kProgressEveryAttempts = 16;
 
 /// The engine writes its own diagnostics to stderr. We keep only the tail: a rejected
 /// config can produce thousands of lines, and the useful part is always the last few.
@@ -197,6 +210,13 @@ void CoreProcess::pollReadiness()
             emit ready();
             return;
         }
+    }
+
+    // Say something while a slow config comes up. Silence for two minutes is
+    // indistinguishable from a hang, and that is how a working connection gets cancelled.
+    if (m_readyAttempts > 0 && m_readyAttempts % kProgressEveryAttempts == 0) {
+        emit logLine(QStringLiteral("Waiting for the engine to open its proxy port (%1s)…")
+                         .arg(m_readyAttempts * kReadyPollMs / 1000));
     }
 
     if (++m_readyAttempts >= kReadyMaxAttempts) {

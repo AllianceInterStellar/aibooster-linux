@@ -42,6 +42,7 @@ private slots:
 
     void locateBinaryHonoursEnvironmentOverride();
     void missingBinaryFailsWithTheSearchedPaths();
+    void readinessTimeoutCoversARealisticSlowStart();
     void readyOnlyAfterTheProxyPortIsOpen();
     void readyWhenTheEngineBindsOnlyIPv6Loopback();
     void stopTerminatesTheEngine();
@@ -114,6 +115,21 @@ void TestCoreProcess::missingBinaryFailsWithTheSearchedPaths()
     QVERIFY(message.contains(QStringLiteral("/usr/libexec/aibooster/aibooster-core")));
 
     qunsetenv("AIBOOSTER_CORE");
+}
+
+void TestCoreProcess::readinessTimeoutCoversARealisticSlowStart()
+{
+    // Not a style check — a measurement. A real subscription (fifteen outbounds, WireGuard
+    // chains, the engine's own reachability tests) took 28 seconds to open its proxy port on
+    // an ordinary machine. The limit was 20 s, so the client gave up first and told the user
+    // the connection had failed while the engine was still coming up correctly.
+    //
+    // Anything at or below that measurement ships that bug again.
+    QVERIFY2(CoreProcess::kReadinessTimeoutMs > 28000,
+             "the readiness timeout is shorter than a real subscription has been measured to "
+             "need; a working config would be reported as a failure");
+    // And generous enough to have real headroom over it.
+    QVERIFY(CoreProcess::kReadinessTimeoutMs >= 60000);
 }
 
 void TestCoreProcess::readyOnlyAfterTheProxyPortIsOpen()

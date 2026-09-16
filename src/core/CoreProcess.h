@@ -46,6 +46,11 @@ public:
     /// Human-readable list of the places searched, for the "engine not found" message.
     static QStringList searchedLocations();
 
+    /// How long start() waits for the proxy inbound before giving up, in milliseconds.
+    /// Public so a test can assert it stays generous: a measured real subscription needed
+    /// 28 s, and an earlier 20 s limit made a working config report a connection failure.
+    static constexpr int kReadinessTimeoutMs = 120000;
+
     State state() const { return m_state; }
     QString lastError() const { return m_lastError; }
 

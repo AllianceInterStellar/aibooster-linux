@@ -162,7 +162,13 @@ Item {
             spacing: 10
 
             Text {
-                Layout.fillWidth: true
+                // Width comes from the dialog's own fixed width, not from Layout.fillWidth.
+                // A wrapping Text sized by the layout makes its height depend on a width that
+                // depends on the content's height — Qt reports a binding loop on
+                // implicitHeight and then picks a size, which clipped the field below this
+                // one clean off the dialog.
+                Layout.preferredWidth: addDialog.availableWidth
+                Layout.maximumWidth: addDialog.availableWidth
                 text: "Paste a subscription URL, a config link (vmess/vless/ss/trojan…), or the raw config content."
                 font.pixelSize: 12
                 color: "#9CA3AF"
@@ -197,7 +203,8 @@ Item {
 
             Text {
                 id: errorText
-                Layout.fillWidth: true
+                Layout.preferredWidth: addDialog.availableWidth
+                Layout.maximumWidth: addDialog.availableWidth
                 font.pixelSize: 12
                 color: "#F87171"
                 wrapMode: Text.WordWrap

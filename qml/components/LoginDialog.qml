@@ -47,7 +47,11 @@ Dialog {
         spacing: 10
 
         Text {
-            Layout.fillWidth: true
+            // Bound to the dialog's fixed width: a wrapping Text sized by the layout makes
+                // its height depend on a width that depends on the content's height, which
+                // Qt reports as a binding loop and then resolves by guessing.
+                Layout.preferredWidth: loginDialog.availableWidth
+                Layout.maximumWidth: loginDialog.availableWidth
             text: loginDialog.step === 0
                   ? "Enter your email and we'll send you a one-time sign-in code."
                   : "Enter the 6-digit code sent to " + loginDialog.pendingEmail + "."
@@ -89,7 +93,11 @@ Dialog {
         }
 
         Text {
-            Layout.fillWidth: true
+            // Bound to the dialog's fixed width: a wrapping Text sized by the layout makes
+                // its height depend on a width that depends on the content's height, which
+                // Qt reports as a binding loop and then resolves by guessing.
+                Layout.preferredWidth: loginDialog.availableWidth
+                Layout.maximumWidth: loginDialog.availableWidth
             text: AccountManager.lastError
             font.pixelSize: 12
             color: "#F87171"
