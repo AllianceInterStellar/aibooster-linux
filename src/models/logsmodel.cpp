@@ -214,9 +214,17 @@ QString LogFilterModel::filterText() const { return m_filterText; }
 void LogFilterModel::setFilterText(const QString &text)
 {
     if (m_filterText != text) {
+        // begin/endFilterChange() arrived in Qt 6.7; current LTS distributions ship 6.4,
+        // where invalidateFilter() is the equivalent (it re-runs the filter and emits the
+        // model resets that keep views and persistent indexes coherent).
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
         beginFilterChange();
         m_filterText = text;
         endFilterChange();
+#else
+        m_filterText = text;
+        invalidateFilter();
+#endif
         emit filterTextChanged();
     }
 }
@@ -226,9 +234,14 @@ int LogFilterModel::selectedLevel() const { return m_selectedLevel; }
 void LogFilterModel::setSelectedLevel(int level)
 {
     if (m_selectedLevel != level) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
         beginFilterChange();
         m_selectedLevel = level;
         endFilterChange();
+#else
+        m_selectedLevel = level;
+        invalidateFilter();
+#endif
         emit selectedLevelChanged();
     }
 }

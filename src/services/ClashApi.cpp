@@ -33,7 +33,7 @@ QNetworkRequest ClashApi::buildRequest(const QString &path) const
     request.setRawHeader("Authorization",
                          "Bearer " + SettingsModel::clashApiSecret().toUtf8());
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    request.setTransferTimeout(std::chrono::milliseconds(kTimeoutMs));
+    request.setTransferTimeout(kTimeoutMs);
     return request;
 }
 

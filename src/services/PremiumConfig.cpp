@@ -84,7 +84,7 @@ void PremiumConfig::tryFetch(int index, std::function<void(QString)> onSuccess,
     request.setHeader(QNetworkRequest::UserAgentHeader, QString::fromLatin1(kUserAgent));
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QVariant::fromValue(QNetworkRequest::NoLessSafeRedirectPolicy));
-    request.setTransferTimeout(std::chrono::milliseconds(kTimeoutMs));
+    request.setTransferTimeout(kTimeoutMs);
 
     QNetworkReply *reply = m_network.get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, index, onSuccess, onError]() {
@@ -131,7 +131,7 @@ void PremiumConfig::tryGet(const QStringList &urls, int index,
     request.setHeader(QNetworkRequest::UserAgentHeader, QString::fromLatin1(kUserAgent));
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QVariant::fromValue(QNetworkRequest::NoLessSafeRedirectPolicy));
-    request.setTransferTimeout(std::chrono::milliseconds(kTimeoutMs));
+    request.setTransferTimeout(kTimeoutMs);
 
     QNetworkReply *reply = m_network.get(request);
     connect(reply, &QNetworkReply::finished, this,

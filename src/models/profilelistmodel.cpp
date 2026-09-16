@@ -578,7 +578,7 @@ void ProfileListModel::downloadProfile(const QString &url, const QString &overri
     request.setRawHeader("Accept", "*/*");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QVariant::fromValue(QNetworkRequest::NoLessSafeRedirectPolicy));
-    request.setTransferTimeout(std::chrono::milliseconds(kDownloadTimeoutMs));
+    request.setTransferTimeout(kDownloadTimeoutMs);
 
     QNetworkReply *reply = m_network->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, url, overrideName]() {

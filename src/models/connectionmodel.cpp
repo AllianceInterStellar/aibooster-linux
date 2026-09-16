@@ -443,7 +443,7 @@ void ConnectionModel::lookupIpAddress(int endpointIndex)
 
     QNetworkRequest request{QUrl(ipEndpoints().at(endpointIndex))};
     request.setRawHeader("Accept", "application/json");
-    request.setTransferTimeout(std::chrono::milliseconds(8000));
+    request.setTransferTimeout(8000);
 
     QNetworkReply *reply = m_ipLookup->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, endpointIndex]() {
