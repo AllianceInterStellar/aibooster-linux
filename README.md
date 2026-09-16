@@ -4,9 +4,15 @@ The Linux desktop client for the [AI Booster](https://allianceinterstellar.com) 
 written in Qt 6 / QML.
 
 **This repository is the user interface only.** The tunnelling engine is a separate program
-under a different licence; it is not contained here, not linked into this application, and
-not shipped in the packages built from this source. The client launches the engine as a
-child process and talks to it over loopback sockets. See [NOTICE.md](NOTICE.md).
+under a different licence; its source is not here and it is never linked into this
+application — the client launches it as a child process and talks to it over loopback
+sockets.
+
+The **release packages** include a prebuilt engine, so they work on install. A build made
+from this source tree does not; you supply the engine yourself, as described below. The
+engine's own source is at
+[aibooster-engine](https://github.com/AllianceInterStellar/aibooster-engine); see
+[NOTICE.md](NOTICE.md) for the licensing.
 
 ---
 
