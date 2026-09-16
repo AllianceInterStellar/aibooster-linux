@@ -45,6 +45,7 @@ private slots:
     void readinessTimeoutCoversARealisticSlowStart();
     void readyOnlyAfterTheProxyPortIsOpen();
     void readyWhenTheEngineBindsOnlyIPv6Loopback();
+    void controlApiPortIsTakenFromWhatTheEngineAnnounces();
     void stopTerminatesTheEngine();
     void engineExitingEarlyIsReportedAsFailure();
 
@@ -190,6 +191,35 @@ void TestCoreProcess::readyWhenTheEngineBindsOnlyIPv6Loopback()
     QSignalSpy ready(&core, &CoreProcess::ready);
     core.start(m_configPath, m_settingsPath, port);
     QVERIFY2(ready.wait(15000), "an IPv6-only proxy inbound was not detected as ready");
+
+    core.stop();
+    qunsetenv("AIBOOSTER_CORE");
+}
+
+void TestCoreProcess::controlApiPortIsTakenFromWhatTheEngineAnnounces()
+{
+    // The engine does not always bind the control port we ask for — with a full sing-box
+    // config it fell back to its own default, and the client went on polling the port from
+    // its settings, where nothing was listening, so traffic read zero on a working tunnel.
+    // It announces what it actually bound; that announcement is the only reliable source.
+    const quint16 port = kTestProxyPort + 9;
+    const QString stub = writeScript(
+        QDir(m_dir.path()), QStringLiteral("announcing-core"),
+        QStringLiteral("#!/bin/sh\n"
+                       "echo 'INFO clash-api: restful api listening at 127.0.0.1:16756'\n"
+                       "exec python3 -c \"import socket,time;"
+                       "s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
+                       "s.bind(('127.0.0.1',%1));s.listen(5);time.sleep(60)\"\n")
+            .arg(port));
+    QVERIFY(!stub.isEmpty());
+    qputenv("AIBOOSTER_CORE", stub.toUtf8());
+
+    CoreProcess core;
+    QSignalSpy detected(&core, &CoreProcess::controlApiPortDetected);
+    core.start(m_configPath, m_settingsPath, port);
+
+    QVERIFY2(detected.wait(15000), "the engine's announced control port was not picked up");
+    QCOMPARE(detected.first().first().toUInt(), 16756u);
 
     core.stop();
     qunsetenv("AIBOOSTER_CORE");

@@ -2,6 +2,7 @@
 #include "vpncore.h"
 
 #include "../core/CoreProcess.h"
+#include "../services/ClashApi.h"
 #include "../platform/SystemProxy.h"
 #include "settingsmodel.h"
 
@@ -44,6 +45,11 @@ VpnCore::VpnCore(QObject *parent)
     connect(m_core, &CoreProcess::ready, this, &VpnCore::handleEngineReady);
     connect(m_core, &CoreProcess::failed, this, &VpnCore::handleEngineFailure);
     connect(m_core, &CoreProcess::logLine, this, &VpnCore::statusMessage);
+    connect(m_core, &CoreProcess::controlApiPortDetected, this, [this](quint16 port) {
+        // Follow the engine rather than our own request; see CoreProcess::controlApiPortDetected.
+        ClashApi::setPort(port);
+        emit statusMessage(QStringLiteral("Engine control API is on port %1").arg(port));
+    });
     connect(m_core, &CoreProcess::stoppedCleanly, this, [this]() {
         if (m_coreStatus == Running || m_coreStatus == Stopping)
             emit statusMessage(QStringLiteral("Engine stopped"));

@@ -21,6 +21,15 @@ class ClashApi : public QObject
     Q_OBJECT
 
 public:
+    /// The port the engine's control API is actually listening on.
+    ///
+    /// Not a constant: the engine decides this port, and it does not always honour the one
+    /// we ask for — with a full sing-box config it fell back to its own default and the
+    /// client polled an address nothing was bound to, so traffic read zero for ever. The
+    /// engine announces the port it chose in its log; CoreProcess parses that and tells us.
+    static void setPort(quint16 port);
+    static quint16 port();
+
     explicit ClashApi(QObject *parent = nullptr);
 
     /// Cumulative counters for the current core session, in bytes.

@@ -79,6 +79,10 @@ signals:
     void stoppedCleanly();
     void failed(const QString &error);
     void logLine(const QString &line);
+
+    /// The port the engine reported its control API is listening on. It is not always the
+    /// one we asked for, so the client follows what the engine says rather than assuming.
+    void controlApiPortDetected(quint16 port);
     void stateChanged(State state);
 
 private:

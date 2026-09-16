@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
+#include <QRegularExpression>
 #include <QTcpSocket>
 
 namespace {
@@ -243,8 +244,23 @@ void CoreProcess::drainOutput()
         m_stderrTail = m_stderrTail.right(kStderrTailBytes);
 
     const QStringList lines = chunk.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-    for (const QString &line : lines)
-        emit logLine(line.trimmed());
+    for (const QString &line : lines) {
+        const QString trimmed = line.trimmed();
+        // "restful api listening at 127.0.0.1:16756" — the engine announcing which port it
+        // actually bound. We ask for one in the settings file and do not always get it, so
+        // this is the only trustworthy source; without it the client polls a dead address
+        // and reports zero traffic on a working tunnel.
+        static const QRegularExpression apiListening(
+            QStringLiteral("restful api listening at\\s+\\S*?:(\\d{2,5})"),
+            QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpressionMatch match = apiListening.match(trimmed);
+        if (match.hasMatch()) {
+            const quint16 port = static_cast<quint16>(match.captured(1).toUInt());
+            if (port != 0)
+                emit controlApiPortDetected(port);
+        }
+        emit logLine(trimmed);
+    }
 }
 
 void CoreProcess::handleFinished(int exitCode, QProcess::ExitStatus status)

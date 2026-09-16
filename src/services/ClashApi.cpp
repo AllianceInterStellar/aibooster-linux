@@ -1,5 +1,7 @@
 #include "ClashApi.h"
 
+#include <atomic>
+
 #include "../models/settingsmodel.h"
 
 #include <QJsonArray>
@@ -25,10 +27,26 @@ ClashApi::ClashApi(QObject *parent)
     m_network.setProxy(QNetworkProxy::NoProxy);
 }
 
+namespace {
+/// Defaults to what we asked the engine for; replaced by what the engine reports it did.
+std::atomic<quint16> g_clashApiPort{SettingsModel::clashApiPort()};
+} // namespace
+
+void ClashApi::setPort(quint16 port)
+{
+    if (port != 0)
+        g_clashApiPort.store(port);
+}
+
+quint16 ClashApi::port()
+{
+    return g_clashApiPort.load();
+}
+
 QNetworkRequest ClashApi::buildRequest(const QString &path) const
 {
     QNetworkRequest request{QUrl(QStringLiteral("http://127.0.0.1:%1%2")
-                                     .arg(SettingsModel::clashApiPort())
+                                     .arg(ClashApi::port())
                                      .arg(path))};
     request.setRawHeader("Authorization",
                          "Bearer " + SettingsModel::clashApiSecret().toUtf8());

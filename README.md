@@ -145,11 +145,18 @@ tfogo_checklinkname0,with_conntrack,with_dhcp" \
 relocations, which binutils older than 2.43 (Ubuntu 22.04 ships 2.38) cannot read. Add it
 back on a newer toolchain if you need the naive protocol.
 
-**Note on traffic statistics.** The client reads live traffic from the engine's Clash API.
-On the engine build tested here that listener never came up — it blocks downloading its
-external web UI — so the traffic figures stay at zero while the tunnel itself works
-normally. The connection is therefore *not* gated on the Clash API: readiness is the proxy
-inbound being open, which is the port traffic actually uses.
+**Note on the engine's control API.** The client reads live traffic from it. Two things had
+to be true for that to work, and neither was:
+
+- The engine opened that listener only after downloading an optional web UI, so on a network
+  where the download stalled the API never existed. Fixed upstream of the binaries we ship —
+  it listens first now.
+- The engine does not always bind the port we ask for; with a full sing-box config it used
+  its own default. The client no longer assumes: it reads the port out of the line the engine
+  prints when it binds.
+
+The connection itself is not gated on any of this. Readiness is the proxy inbound being
+open, which is the port traffic actually goes through.
 
 ## Packaging
 
