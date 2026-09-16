@@ -84,6 +84,49 @@ jobs:
           # toolchain it panics before main(), which `version` surfaces immediately.
           ./aibooster-core version
 
+      # `version` is not enough. A module-path rename once produced an engine that compiled,
+      # printed its version happily, and then panicked the moment a tunnel started — the
+      # corrupted protobuf descriptors live in packages that only initialise by then. So run
+      # a real tunnel against a direct outbound and put a request through it.
+      - name: Smoke test the engine
+        run: |
+          mkdir -p enginetest && cd enginetest
+          cat > config.json <<'CFG'
+          { "log": { "level": "info" }, "outbounds": [ { "type": "direct", "tag": "direct-out" } ] }
+          CFG
+          cat > settings.json <<'SET'
+          {"enable-tun":false,"set-system-proxy":false,"mixed-port":2334,"strict-route":true,
+           "tun-implementation":"mixed","mtu":9000,"enable-clash-api":true,"clash-api-port":18756,
+           "web-secret":"ci","log-level":"info","remote-dns-address":"1.1.1.1",
+           "direct-dns-address":"1.1.1.1","url-test-interval":600,
+           "connection-test-url":"http://cp.cloudflare.com/","ipv6-mode":"ipv4_only"}
+          SET
+
+          ../aibooster-core run -c config.json -d settings.json > engine.log 2>&1 &
+          enginepid=$!
+          ready=0
+          for _ in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/2334) 2>/dev/null; then exec 3<&- 3>&-; ready=1; break; fi
+            sleep 0.5
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::the engine never opened its proxy inbound"; cat engine.log; exit 1
+          fi
+
+          code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+                    -x http://127.0.0.1:2334 http://cp.cloudflare.com/ || true)"
+          kill "$enginepid" 2>/dev/null || true
+
+          if grep -qiE 'panic|fatal error' engine.log; then
+            echo "::error::the engine panicked while running"; cat engine.log; exit 1
+          fi
+          if [ "$code" != "204" ] && [ "$code" != "200" ]; then
+            echo "::error::no traffic through the engine's proxy (HTTP $code)"; cat engine.log; exit 1
+          fi
+          echo "Engine carried a request through its proxy (HTTP $code)."
+          cd ..
+
       - name: Stage
         run: |
           DESTDIR="$PWD/pkgroot" cmake --install build --prefix /usr
