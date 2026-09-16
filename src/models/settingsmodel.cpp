@@ -186,7 +186,7 @@ namespace {
 
 /// "Auto" (or empty) means "whatever the engine would have chosen". Since the engine no
 /// longer fills that in for us on this path, we spell its own documented default out.
-/// Keep in sync with the engine's DefaultHiddifyOptions() (upstream hiddify-core).
+/// Keep in sync with the engine's own default options.
 QString resolvedDns(const QString &configured)
 {
     if (configured.isEmpty() || configured.compare(QLatin1String("Auto"), Qt::CaseInsensitive) == 0)

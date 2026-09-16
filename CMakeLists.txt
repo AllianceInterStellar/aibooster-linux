@@ -150,6 +150,14 @@ if(AIBOOSTER_BUILD_TESTS)
     target_link_libraries(test_enginesettings PRIVATE Qt6::Test Qt6::Quick)
     add_test(NAME enginesettings COMMAND test_enginesettings)
 
+    qt_add_executable(test_deeplinks
+        tests/test_deeplinks.cpp
+        src/models/profilelistmodel.cpp
+        src/models/profilelistmodel.h
+    )
+    target_link_libraries(test_deeplinks PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
+    add_test(NAME deeplinks COMMAND test_deeplinks)
+
     qt_add_executable(test_systemproxy
         tests/test_systemproxy.cpp
         src/platform/SystemProxy.cpp

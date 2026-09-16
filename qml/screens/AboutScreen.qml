@@ -94,7 +94,7 @@ Item {
         // Upstream attribution. GPL-3.0 section 7 requires the engine's authors be credited,
         // the licence be reachable, and modification be stated — so this is not decoration
         // and must not be trimmed to make the screen tidier. It replaced a bare
-        // "Based on Hiddify", which named the project but met none of those obligations.
+        // a one-line credit that named the upstream project but met none of those obligations.
         Item { Layout.preferredHeight: 8 }
 
         Text {

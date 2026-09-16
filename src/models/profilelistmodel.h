@@ -43,6 +43,20 @@ class ProfileListModel : public QAbstractListModel
     Q_PROPERTY(QString activeProfileName READ activeProfileName NOTIFY activeProfileChanged)
 
 public:
+
+    /// Pulls the real subscription URL out of a client deep link.
+    ///
+    /// A deep link is recognised by SHAPE, not by a list of application names: any scheme
+    /// that is not a direct protocol link and that carries a `url=` parameter. That covers
+    /// every client whose links this used to enumerate, plus any that did not exist when
+    /// this was written, and it keeps no vendor's name in the source.
+    ///
+    /// Returns an empty string when @p input is not a deep link at all. When it *is* one
+    /// but carries no url, returns an empty string and sets @p malformed — the caller has
+    /// to tell "not a deep link" from "a broken deep link" to report it usefully.
+    /// @p nameOut receives the link's `name=` parameter when present.
+    static QString subscriptionUrlFromDeepLink(const QString &input, QString *nameOut = nullptr,
+                                               bool *malformed = nullptr);
     enum Roles {
         IdRole = Qt::UserRole + 1,
         NameRole,

@@ -115,8 +115,8 @@ public:
     static quint16 clashApiPort() { return 18756; }
     static QString clashApiSecret() { return QStringLiteral("aibooster-clash-api"); }
 
-    /// The engine's options JSON. Key names verified against the engine's own
-    /// v2/config/hiddify_option.go (upstream hiddify-core);
+    /// The engine's options JSON. Key names verified against the engine's own options
+    /// struct (see NOTICE.md for where the engine comes from);
     /// the core MERGES this onto its defaults, so omitting a key keeps the sensible default.
     QByteArray buildEngineSettingsJson() const;
 

@@ -26,13 +26,6 @@ const char *const kUserAgent = "AiBooster/2.0";
 constexpr int kDownloadTimeoutMs = 15000;
 constexpr double kBytesPerGB = 1024.0 * 1024.0 * 1024.0;
 
-QStringList deepLinkPrefixes()
-{
-    return {QStringLiteral("hiddify://"), QStringLiteral("v2ray://"), QStringLiteral("v2rayn://"),
-            QStringLiteral("v2rayng://"), QStringLiteral("clash://"), QStringLiteral("clashmeta://"),
-            QStringLiteral("sing-box://")};
-}
-
 QStringList directConfigPrefixes()
 {
     return {QStringLiteral("vmess://"),     QStringLiteral("vless://"), QStringLiteral("ss://"),
@@ -512,6 +505,51 @@ void ProfileListModel::renameProfile(const QString &id, const QString &name)
     save();
 }
 
+
+QString ProfileListModel::subscriptionUrlFromDeepLink(const QString &input, QString *nameOut,
+                                                      bool *malformed)
+{
+    if (malformed)
+        *malformed = false;
+
+    const QString trimmed = input.trimmed();
+
+    // A direct protocol link (vless://, ss://, …) is a config, never a deep link — check
+    // first so one can never be mistaken for the other.
+    if (isProtocolLink(trimmed))
+        return {};
+
+    // Plain subscription URLs are downloaded as they are.
+    if (trimmed.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)
+        || trimmed.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive)) {
+        return {};
+    }
+
+    static const QRegularExpression schemeRe(QStringLiteral("^[A-Za-z][A-Za-z0-9+.\\-]*://"));
+    const QRegularExpressionMatch match = schemeRe.match(trimmed);
+    if (!match.hasMatch())
+        return {};
+
+    QString rest = trimmed.mid(match.capturedLength());
+    // Several clients put the payload behind an "import" path segment.
+    if (rest.startsWith(QStringLiteral("import/")) || rest.startsWith(QStringLiteral("import?")))
+        rest = rest.mid(7);
+
+    const QHash<QString, QString> params = parseQueryParams(rest);
+    const QString url = params.value(QStringLiteral("url"));
+    if (url.isEmpty()) {
+        // It looked like a deep link but carries nothing to fetch. Saying so beats storing
+        // the raw text as a profile that can never connect.
+        if (malformed)
+            *malformed = true;
+        return {};
+    }
+
+    if (nameOut)
+        *nameOut = params.value(QStringLiteral("name"));
+    return url;
+}
+
 void ProfileListModel::addProfile(const QString &urlOrContent, const QString &overrideName)
 {
     const QString trimmed = urlOrContent.trimmed();
@@ -520,21 +558,16 @@ void ProfileListModel::addProfile(const QString &urlOrContent, const QString &ov
         return;
     }
 
-    // hiddify:// / v2ray:// … deep links carry the real subscription URL in a `url=` parameter.
-    const QStringList deepLinks = deepLinkPrefixes();
-    for (const QString &prefix : deepLinks) {
-        if (!trimmed.startsWith(prefix, Qt::CaseInsensitive))
-            continue;
-        QString rest = trimmed.mid(trimmed.indexOf(QStringLiteral("://")) + 3);
-        if (rest.startsWith(QStringLiteral("import/")) || rest.startsWith(QStringLiteral("import?")))
-            rest = rest.mid(7);
-        const QHash<QString, QString> params = parseQueryParams(rest);
-        const QString url = params.value(QStringLiteral("url"));
-        if (url.isEmpty()) {
-            emit profileError(QStringLiteral("Deep link carries no subscription URL"));
-            return;
-        }
-        downloadProfile(url, overrideName.isEmpty() ? params.value(QStringLiteral("name")) : overrideName);
+    // Client deep links carry the real subscription URL in a `url=` parameter.
+    QString linkName;
+    bool malformedDeepLink = false;
+    const QString deepLinkUrl = subscriptionUrlFromDeepLink(trimmed, &linkName, &malformedDeepLink);
+    if (malformedDeepLink) {
+        emit profileError(QStringLiteral("Deep link carries no subscription URL"));
+        return;
+    }
+    if (!deepLinkUrl.isEmpty()) {
+        downloadProfile(deepLinkUrl, overrideName.isEmpty() ? linkName : overrideName);
         return;
     }
 

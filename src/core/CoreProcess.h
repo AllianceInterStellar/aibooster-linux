@@ -9,7 +9,7 @@
 
 /// Supervises the VPN engine as a **separate process**.
 ///
-/// The engine (hiddify-core / sing-box) is GPL-3.0 licensed and is NOT part of this
+/// The engine is GPL-3.0 licensed and is NOT part of this
 /// repository. This client never links it, dlopen()s it, or embeds it: it spawns the
 /// engine binary and talks to it exclusively over loopback sockets (the Clash API and
 /// the mixed inbound). That boundary is deliberate — it keeps the two programs separate

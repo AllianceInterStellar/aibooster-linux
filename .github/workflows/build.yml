@@ -87,7 +87,7 @@ jobs:
           # run — and the proxy test skips itself when it finds no gsettings backend,
           # which is exactly the condition a CI runner can drift into. Requiring
           # "0 skipped" makes that a failure instead of a green tick over nothing.
-          for t in test_coreprocess test_systemproxy test_enginesettings; do
+          for t in test_coreprocess test_systemproxy test_enginesettings test_deeplinks; do
             echo "── $t ─────────────────────────────────"
             QT_QPA_PLATFORM=offscreen dbus-run-session -- "./build/$t" 2>&1 | tee "$t.out"
             totals="$(grep -E '^Totals:' "$t.out" | tail -1)"
