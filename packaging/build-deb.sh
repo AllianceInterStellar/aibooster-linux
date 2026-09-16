@@ -40,9 +40,24 @@ mkdir -p "$STAGE/DEBIAN"
 declare -a PKGS=()
 while read -r lib; do
     [ -n "$lib" ] || continue
-    resolved="$(readlink -f "$lib")"
-    owner="$(dpkg -S "$resolved" 2>/dev/null | head -1 | cut -d: -f1)"
-    [ -n "$owner" ] && PKGS+=("$owner")
+    owner=""
+    # Ask about the path as the linker reported it AND as it resolves. On Ubuntu 22.04
+    # /lib is a symlink into /usr/lib, and dpkg only knows the file under the spelling it
+    # recorded — resolving first loses libgcc_s.so.1, whose owner then comes back empty.
+    for candidate in "$lib" "$(readlink -f "$lib")"; do
+        # `|| true` matters: dpkg -S exits 1 for a path it does not know, and under
+        # `set -e` with pipefail that kills the script mid-loop with no output at all.
+        owner="$(dpkg -S "$candidate" 2>/dev/null | head -1 | cut -d: -f1 || true)"
+        if [ -n "$owner" ]; then
+            break
+        fi
+    done
+    if [ -n "$owner" ]; then
+        PKGS+=("$owner")
+    else
+        # Not fatal: a library dpkg does not own is one we cannot depend on anyway.
+        echo "note: no package owns $lib; not adding a dependency for it" >&2
+    fi
 done < <(ldd "$STAGE/usr/bin/aibooster" | awk '/=>/ && $3 ~ /^\// {print $3}')
 
 if [ ${#PKGS[@]} -eq 0 ]; then
