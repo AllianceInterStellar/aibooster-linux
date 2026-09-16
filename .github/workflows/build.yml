@@ -72,6 +72,23 @@ jobs:
           fi
           echo "App stayed up for the full timeout with a clean QML log."
 
+      # Static-check every QML file, including ones the app only loads on demand. The
+      # start-up smoke test below instantiates the Home screen and little else, so an error
+      # in a lazily-loaded page (About, Licenses, a settings tab) reaches users unseen —
+      # which is exactly how a broken Licenses page shipped once.
+      - name: Lint QML
+        run: |
+          sudo apt-get install -y --no-install-recommends qt6-declarative-dev-tools
+          QMLLINT=$(command -v qmllint6 || echo /usr/lib/qt6/bin/qmllint)
+          fail=0
+          for f in $(find qml -name '*.qml' | sort); do
+            out=$("$QMLLINT" --bare -I qml "$f" 2>&1) || true
+            if echo "$out" | grep -qE '\[(unqualified|import|syntax|missing-property|invalid-lint-directive)\]|error:'; then
+              echo "::error file=$f::$out"; fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "qmllint clean." || exit 1
+
       # Engine supervision against a stub engine, and the desktop-proxy round trip.
       # dbus-run-session gives gsettings a session bus; without one the GNOME backend is
       # unusable and the proxy test would skip itself into a meaningless pass.

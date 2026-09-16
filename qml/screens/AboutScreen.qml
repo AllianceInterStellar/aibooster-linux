@@ -4,6 +4,8 @@ import QtQuick.Layouts
 Item {
     id: aboutScreen
 
+    property bool showLicenses: false
+
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
@@ -91,57 +93,16 @@ Item {
             color: "#6B7280"
         }
 
-        // Upstream attribution. GPL-3.0 section 7 requires the engine's authors be credited,
-        // the licence be reachable, and modification be stated — so this is not decoration
-        // and must not be trimmed to make the screen tidier. It replaced a bare
-        // a one-line credit that named the upstream project but met none of those obligations.
-        Item { Layout.preferredHeight: 8 }
+        // The licence notices live on their own page (LicensesScreen.qml). They are
+        // obligations under GPL-3.0 section 7 — credit, a reachable licence, and a statement
+        // of modification — so this entry point must stay reachable; it is not decoration.
+        Item { Layout.preferredHeight: 4 }
 
-        Text {
+        LegalLink {
             Layout.alignment: Qt.AlignHCenter
-            text: "Open source"
+            text: "Open source licenses"
             font.pixelSize: 12
-            font.weight: Font.Medium
-            color: "#6B7280"
-        }
-
-        Text {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.maximumWidth: 420
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            text: "This client is GPL-3.0. Its tunnelling engine is built from hiddify-core "
-                  + "and sing-box, rebuilt and renamed by us; the engine itself is unmodified, "
-                  + "and it runs as a separate process rather than being linked into this app."
-            font.pixelSize: 11
-            lineHeight: 1.25
-            color: "#4B5563"
-        }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 14
-
-            LegalLink {
-                text: "GPL-3.0"
-                url: "https://www.gnu.org/licenses/gpl-3.0.html"
-                font.pixelSize: 11
-            }
-            LegalLink {
-                text: "hiddify-core"
-                url: "https://github.com/hiddify/hiddify-core"
-                font.pixelSize: 11
-            }
-            LegalLink {
-                text: "sing-box"
-                url: "https://github.com/SagerNet/sing-box"
-                font.pixelSize: 11
-            }
-            LegalLink {
-                text: "This client"
-                url: "https://github.com/AllianceInterStellar/aibooster-linux"
-                font.pixelSize: 11
-            }
+            onActivated: aboutScreen.showLicenses = true
         }
     }
 
@@ -149,6 +110,9 @@ Item {
         id: legalLink
 
         property string url: ""
+        /// Emitted on click. Defaults to opening `url` externally, but a caller can handle
+        /// it instead — which is how the licence page is reached without leaving the app.
+        signal activated()
 
         font.pixelSize: 13
         font.weight: Font.Medium
@@ -159,7 +123,11 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: Qt.openUrlExternally(legalLink.url)
+            onClicked: {
+                legalLink.activated();
+                if (legalLink.url !== "")
+                    Qt.openUrlExternally(legalLink.url);
+            }
         }
     }
 
@@ -182,5 +150,15 @@ Item {
             font.weight: Font.Medium
             color: "#E5E7EB"
         }
+    }
+
+    // Shown in place, so About stays a normal screen in the sidebar's stack and no
+    // navigation plumbing is needed for a page reached from exactly one link.
+    Loader {
+        anchors.fill: parent
+        active: aboutScreen.showLicenses
+        visible: active
+        source: "LicensesScreen.qml"
+        onLoaded: item.back.connect(function() { aboutScreen.showLicenses = false; })
     }
 }

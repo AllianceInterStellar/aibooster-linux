@@ -87,6 +87,7 @@ qt_add_qml_module(aibooster
         qml/screens/SettingsScreen.qml
         qml/screens/LogsScreen.qml
         qml/screens/AboutScreen.qml
+        qml/screens/LicensesScreen.qml
         qml/screens/settings/RouteSettings.qml
         qml/screens/settings/DnsSettings.qml
         qml/screens/settings/InboundSettings.qml
