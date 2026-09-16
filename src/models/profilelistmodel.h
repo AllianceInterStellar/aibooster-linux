@@ -14,7 +14,7 @@ struct ProfileData {
     QString id;
     QString name;
     QString url;
-    /// Raw subscription payload (sing-box JSON, a base64 blob or a list of vmess:// style links).
+    /// Raw subscription payload (engine JSON, a base64 blob or a list of vmess:// style links).
     QString content;
     bool isActive = false;
     bool isPremium = false;

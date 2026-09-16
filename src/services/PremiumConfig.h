@@ -8,12 +8,12 @@
 #include <QStringList>
 #include <functional>
 
-/// Fetches and decrypts the "AiBooster Premium" sing-box config, byte-for-byte compatible
+/// Fetches and decrypts the "AiBooster Premium" engine config, byte-for-byte compatible
 /// with the three mobile clients:
 ///
 ///   GET primary (Lambda URL) then backup (CloudFront), UA "AiBooster/2.0", 15 s timeout.
 ///   Body {"data":"<base64>"} → base64 → [IV(12) | TAG(16) | ciphertext] → AES-256-GCM
-///   (empty AAD) → UTF-8 sing-box JSON → sanitize() (the full Swift superset, S2–S6).
+///   (empty AAD) → UTF-8 engine JSON → sanitize() (the full Swift superset, S2–S6).
 class PremiumConfig : public QObject
 {
     Q_OBJECT

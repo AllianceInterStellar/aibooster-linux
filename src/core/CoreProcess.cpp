@@ -82,8 +82,15 @@ QString CoreProcess::locateBinary()
 {
     const QString appDir = QCoreApplication::applicationDirPath();
 
+    // An explicit override is authoritative. If $AIBOOSTER_CORE is set we use it or we find
+    // nothing — falling through to a system path would silently run a *different* engine
+    // than the one the caller named, which is the worst way to answer "which engine is
+    // this?". It also keeps the tests honest on a machine where the package is installed.
+    const QString override = qEnvironmentVariable("AIBOOSTER_CORE");
+    if (!override.isEmpty())
+        return existingExecutable(override);
+
     const QStringList candidates = {
-        qEnvironmentVariable("AIBOOSTER_CORE"),
         appDir + QStringLiteral("/aibooster-core"),
         QDir(appDir + QStringLiteral("/../libexec/aibooster")).absolutePath()
             + QStringLiteral("/aibooster-core"),

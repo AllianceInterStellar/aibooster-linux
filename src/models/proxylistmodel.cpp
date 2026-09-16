@@ -403,8 +403,8 @@ bool parseProxyLine(const QString &line, int index, ProxyNode *out)
     return parseGenericNode(line, index, type, out);
 }
 
-/// sing-box outbounds/endpoints. Group entries (selector/urltest/…) are not nodes.
-QVector<ProxyNode> parseSingboxJson(const QString &json)
+/// the engine's outbounds/endpoints. Group entries (selector/urltest/…) are not nodes.
+QVector<ProxyNode> parseEngineJson(const QString &json)
 {
     QJsonParseError error{};
     const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &error);
@@ -412,7 +412,7 @@ QVector<ProxyNode> parseSingboxJson(const QString &json)
         return {};
     const QJsonObject root = doc.object();
 
-    // sing-box 1.11+ moved WireGuard/WARP out of `outbounds` into a top-level `endpoints` array,
+    // The engine moved WireGuard/WARP, from 1.11 onward, out of `outbounds` into a top-level `endpoints` array,
     // so WARP profiles keep all their real nodes there while outbounds holds only the groups.
     QJsonArray entries = root.value(QStringLiteral("outbounds")).toArray();
     const QJsonArray endpoints = root.value(QStringLiteral("endpoints")).toArray();
@@ -475,11 +475,11 @@ QVector<ProxyNode> parseProxyNodes(const QString &content)
     if (trimmed.isEmpty())
         return {};
     if (trimmed.startsWith(QLatin1Char('{')))
-        return parseSingboxJson(trimmed);
+        return parseEngineJson(trimmed);
 
     const QString decoded = decodeSubscriptionBody(trimmed);
     if (decoded.trimmed().startsWith(QLatin1Char('{')))
-        return parseSingboxJson(decoded.trimmed());
+        return parseEngineJson(decoded.trimmed());
 
     QVector<ProxyNode> nodes;
     int index = 0;

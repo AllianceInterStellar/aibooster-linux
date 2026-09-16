@@ -48,7 +48,7 @@ public:
     static QString engineDir();
     static QString runningConfigPath();
 
-    /// True when the payload can actually yield a tunnel (sing-box JSON with outbounds, or a
+    /// True when the payload can actually yield a tunnel (engine JSON with outbounds, or a
     /// share-link/base64 subscription). Public for the headless tests.
     static bool isUsableConfig(const QByteArray &configData);
 

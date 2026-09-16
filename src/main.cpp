@@ -2,6 +2,7 @@
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickStyle>
 #include <QSocketNotifier>
 
@@ -95,6 +96,11 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ProfileListModel", profiles);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "LogsModel", logs);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "SettingsModel", settings);
+
+    // The real Qt this binary is linked against. The About panel used to print a hardcoded
+    // "6.x", which stayed right by being too vague to be wrong.
+    engine.rootContext()->setContextProperty(QStringLiteral("qtRuntimeVersion"),
+                                             QString::fromLatin1(qVersion()));
 
     const QUrl url(QStringLiteral("qrc:/AiBooster/qml/Main.qml"));
     // objectCreated + null check rather than objectCreationFailed, which is Qt 6.4+ and

@@ -160,7 +160,7 @@ void VpnCore::downloadSubscription(const QString &url)
 }
 
 /// True when the payload is something the engine can actually build a tunnel from:
-/// a sing-box JSON object carrying a non-empty "outbounds" array, or a subscription body
+/// an engine JSON object carrying a non-empty "outbounds" array, or a subscription body
 /// (share links, or base64 that decodes to them). Deliberately rejects the `?type=free`
 /// profile INDEX, whose {"data":{"profiles":[…]}} shape the engine silently discards.
 bool VpnCore::isUsableConfig(const QByteArray &configData)

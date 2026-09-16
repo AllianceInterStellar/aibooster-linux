@@ -58,9 +58,10 @@ Item {
                 spacing: 12
 
                 InfoRow { label: "Platform"; value: Qt.platform.os }
-                InfoRow { label: "Qt Version"; value: "6.x" }
+                // The real runtime version, not a hardcoded "6.x" that goes stale silently.
+                InfoRow { label: "Qt Version"; value: qtRuntimeVersion }
                 InfoRow { label: "Build"; value: "QML + C++" }
-                InfoRow { label: "Engine"; value: "Sing-Box" }
+                InfoRow { label: "Engine"; value: "AI Booster Engine" }
                 InfoRow { label: "License"; value: "GPLv3" }
             }
         }

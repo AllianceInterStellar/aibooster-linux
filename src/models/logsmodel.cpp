@@ -48,7 +48,7 @@ LogsModel::LogsModel(QObject *parent)
 QString LogsModel::logFilePath()
 {
     // VpnCore::setupAndStart passes AppDataLocation as the core's base dir, and the generated
-    // sing-box config writes its log to the relative path data/box.log.
+    // The engine writes its log to the relative path data/box.log.
     return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/data/box.log";
 }
 

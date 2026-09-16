@@ -78,18 +78,27 @@ void TestCoreProcess::locateBinaryHonoursEnvironmentOverride()
     qputenv("AIBOOSTER_CORE", stub.toUtf8());
     QCOMPARE(CoreProcess::locateBinary(), stub);
 
-    // An override pointing at something that is not there must not be returned: silently
-    // using a stale path is how "it connected to the wrong engine" happens.
+    // An override pointing at something that is not there yields nothing at all. It must
+    // NOT fall through to a system path: answering a request for one engine with a
+    // different one is how "it connected to the wrong engine" happens, and on a machine
+    // with the package installed that fallback would silently succeed.
     qputenv("AIBOOSTER_CORE", QByteArray("/nonexistent/aibooster-core"));
-    QVERIFY(CoreProcess::locateBinary() != QStringLiteral("/nonexistent/aibooster-core"));
+    QVERIFY(CoreProcess::locateBinary().isEmpty());
     qunsetenv("AIBOOSTER_CORE");
 }
 
 void TestCoreProcess::missingBinaryFailsWithTheSearchedPaths()
 {
+    // Restored by the destructor, so a failing assertion — which aborts the rest of this
+    // function — cannot leak a broken PATH into every test that follows. That is exactly
+    // what happened once: one failure here left PATH=/nonexistent behind and the next three
+    // tests failed because their stub engines could no longer find a shell.
+    struct PathGuard {
+        QByteArray saved = qgetenv("PATH");
+        ~PathGuard() { qputenv("PATH", saved); }
+    } pathGuard;
+
     qputenv("AIBOOSTER_CORE", QByteArray("/nonexistent/aibooster-core"));
-    // Also keep $PATH from accidentally supplying one on a developer machine.
-    const QByteArray savedPath = qgetenv("PATH");
     qputenv("PATH", QByteArray("/nonexistent"));
 
     CoreProcess core;
@@ -104,7 +113,6 @@ void TestCoreProcess::missingBinaryFailsWithTheSearchedPaths()
     QVERIFY(message.contains(QStringLiteral("$AIBOOSTER_CORE")));
     QVERIFY(message.contains(QStringLiteral("/usr/libexec/aibooster/aibooster-core")));
 
-    qputenv("PATH", savedPath);
     qunsetenv("AIBOOSTER_CORE");
 }
 

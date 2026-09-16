@@ -210,7 +210,7 @@ QString detectProtocolFromContent(const QString &content)
     if (decoded.contains(QStringLiteral("[Interface]")))
         return QStringLiteral("WireGuard");
     if (decoded.trimmed().startsWith(QLatin1Char('{')))
-        return QStringLiteral("sing-box config");
+        return QStringLiteral("AI Booster config");
     return {};
 }
 

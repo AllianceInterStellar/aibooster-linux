@@ -290,7 +290,7 @@ QString PremiumConfig::sanitize(const QString &configJson)
     if (root.contains(QStringLiteral("outbounds")) && root.value(QStringLiteral("outbounds")).isArray()) {
         QJsonArray outbounds = root.value(QStringLiteral("outbounds")).toArray();
 
-        // S3: sing-box has no "balancer" — rewrite to a selector.
+        // S3: the engine has no "balancer" — rewrite to a selector.
         for (int i = 0; i < outbounds.size(); ++i) {
             if (!outbounds.at(i).isObject())
                 continue;
