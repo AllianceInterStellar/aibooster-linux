@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="cy" cx="20%" cy="18%" r="62%">
+      <stop offset="0%" stop-color="#164e63"/><stop offset="100%" stop-color="#164e63" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vi" cx="82%" cy="86%" r="62%">
+      <stop offset="0%" stop-color="#4c1d95"/><stop offset="100%" stop-color="#4c1d95" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#030712"/>
+  <rect width="256" height="256" rx="56" fill="url(#cy)"/>
+  <rect width="256" height="256" rx="56" fill="url(#vi)"/>
+  <g transform="translate(128,128) rotate(45)">
+    <rect x="-62" y="-62" width="124" height="124" rx="31" fill="none" stroke="#67e8f9" stroke-width="5"/>
+  </g>
+  <text x="128" y="128" text-anchor="middle" dominant-baseline="central"
+        font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="64" font-weight="700"
+        letter-spacing="4" fill="#ffffff">AI</text>
+</svg>

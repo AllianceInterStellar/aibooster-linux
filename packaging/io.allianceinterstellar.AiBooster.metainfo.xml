@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.allianceinterstellar.AiBooster</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>AI Booster</name>
+  <summary>VPN client for the AI Booster network</summary>
+
+  <description>
+    <p>
+      The Linux desktop client for AI Booster. It manages subscriptions and profiles,
+      selects servers, shows live traffic and logs, and points the desktop's proxy
+      settings at the local tunnel.
+    </p>
+    <p>
+      This package is the user interface only. The tunnelling engine is a separate
+      program that this client launches and talks to over loopback sockets; it is not
+      linked into the application and is distributed separately.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.allianceinterstellar.AiBooster.desktop</launchable>
+  <url type="homepage">https://allianceinterstellar.com</url>
+  <url type="bugtracker">https://github.com/AllianceInterStellar/aibooster-linux/issues</url>
+
+  <provides>
+    <binary>aibooster</binary>
+  </provides>
+
+  <content_rating type="oars-1.1"/>
+</component>

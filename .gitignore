@@ -1,0 +1,22 @@
+build/
+build-*/
+dist/
+stage/
+pkgroot/
+.cache/
+compile_commands.json
+CMakeUserPresets.json
+*.user
+.DS_Store
+.vscode/
+.idea/
+
+# Never commit an engine binary: it is a separate program under a different licence, and
+# this repository deliberately ships no engine. See NOTICE.md.
+aibooster-core
+*.so
+*.dylib
+*.dll
+
+# Local deployment configuration (keys, endpoints) belongs on the cmake command line.
+*.local.cmake

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=AI Booster
+GenericName=VPN Client
+Comment=Connect through the AI Booster network
+Exec=aibooster
+Icon=io.allianceinterstellar.AiBooster
+Terminal=false
+Categories=Network;
+Keywords=VPN;Proxy;Privacy;Tunnel;
+StartupNotify=true
+StartupWMClass=aibooster
