@@ -57,7 +57,7 @@ fi
 DEPENDS="$(printf '%s\n' "${PKGS[@]}" | sort -u | paste -sd, - | sed 's/,/, /g')"
 # QML modules are resolved by name at runtime, so they appear in no linker record and the
 # ldd walk above cannot see them. Missing these produces a window that opens blank.
-QML_DEPENDS="qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates"
+QML_DEPENDS="qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtqml-workerscript"
 
 cat > "$STAGE/DEBIAN/control" <<CONTROL
 Package: aibooster

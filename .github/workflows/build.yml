@@ -46,15 +46,30 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             qml6-module-qtquick qml6-module-qtquick-window \
             qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtquick-templates
-          set -o pipefail
-          QT_QPA_PLATFORM=offscreen QT_LOGGING_RULES='qt.qml.binding.removal.info=false' \
-            timeout 20s ./build/aibooster 2>&1 | tee smoke.log || true
-          if grep -qiE '\.qml:[0-9]+.*(error|is not a type|Cannot assign|ReferenceError)' smoke.log; then
-            echo "::error::QML errors during start-up"
+            qml6-module-qtquick-templates qml6-module-qtqml-workerscript
+          # The pass condition is the EXIT CODE, not a log pattern. main() wires
+          # objectCreationFailed to exit(-1), so a QML failure makes the process die at
+          # once; a healthy app runs until timeout kills it, which is exit 124. Grepping
+          # for phrases was tried first and reported success while the log plainly said
+          # "failed to load component" — the pattern simply did not match that wording.
+          set +e
+          QT_QPA_PLATFORM=offscreen timeout 20s ./build/aibooster > smoke.log 2>&1
+          rc=$?
+          set -e
+          cat smoke.log
+
+          if [ "$rc" -ne 124 ]; then
+            echo "::error::App exited on its own (code $rc) instead of running until the \
+          timeout — start-up failed. See the log above."
             exit 1
           fi
-          echo "No QML errors."
+
+          # Secondary net for problems that do not abort start-up.
+          if grep -qiE 'failed to load component|is not installed|is not a type|Cannot assign|ReferenceError|\.qml:[0-9]+.*error' smoke.log; then
+            echo "::error::QML problems during start-up"
+            exit 1
+          fi
+          echo "App stayed up for the full timeout with a clean QML log."
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
