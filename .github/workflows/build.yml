@@ -39,11 +39,14 @@ jobs:
       # error — that is what catches a renamed property or a missing import.
       - name: Smoke test (offscreen)
         run: |
+          # Exactly the modules the QML imports (QtQuick, QtQuick.Controls,
+          # QtQuick.Layouts) plus what Controls needs at runtime. Deliberately no
+          # QtQuick.Effects: nothing imports it, and it does not exist before Qt 6.5 —
+          # asking for it made this step fail on the Qt 6.4 we target.
           sudo apt-get install -y --no-install-recommends \
             qml6-module-qtquick qml6-module-qtquick-window \
             qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtquick-templates qml6-module-qtqml-workerscript \
-            qml6-module-qtquick-effects
+            qml6-module-qtquick-templates
           set -o pipefail
           QT_QPA_PLATFORM=offscreen QT_LOGGING_RULES='qt.qml.binding.removal.info=false' \
             timeout 20s ./build/aibooster 2>&1 | tee smoke.log || true
