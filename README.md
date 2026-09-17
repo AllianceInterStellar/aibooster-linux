@@ -1,5 +1,7 @@
 # AI Booster — Linux client
 
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/PkqfnYSmZB)
+
 The Linux desktop client for the [AI Booster](https://allianceinterstellar.com) network,
 written in Qt 6 / QML.
 
@@ -169,6 +171,12 @@ packaging/build-deb.sh "$PWD/pkgroot"
 
 Installs a `.desktop` entry, a scalable icon and AppStream metainfo under the usual XDG
 locations. The package does not depend on, contain, or download the engine.
+
+## Community
+
+Questions about a build, a packaging quirk or the engine interface are welcome in
+[our Discord](https://discord.gg/PkqfnYSmZB) — `#ai-booster` for the client, `#help-and-feedback`
+for anything else. Bugs in this repository are better filed as issues so they stay searchable.
 
 ## Licence
 
