@@ -27,26 +27,6 @@ Item {
                 color: "#E9D5FF"
             }
 
-            Item { Layout.preferredWidth: 10 }
-
-            // "AiBooster Premium" account state, visible where profiles are managed.
-            Rectangle {
-                visible: AccountManager.loggedIn && AccountManager.premium
-                Layout.preferredWidth: premiumBadgeLabel.implicitWidth + 18
-                Layout.preferredHeight: 22
-                radius: 11
-                color: "#7C3AED"
-
-                Text {
-                    id: premiumBadgeLabel
-                    anchors.centerIn: parent
-                    text: "★ Premium"
-                    font.pixelSize: 11
-                    font.weight: Font.Medium
-                    color: "#FDE68A"
-                }
-            }
-
             Item { Layout.fillWidth: true }
 
             Rectangle {
@@ -116,7 +96,6 @@ Item {
                 profileName: model.name
                 url: model.url
                 isActive: model.isActive
-                isPremium: model.isPremium
                 trafficProgress: model.trafficProgress
                 remainingDays: model.remainingDays
                 usedTrafficStr: model.usedTraffic
@@ -144,8 +123,7 @@ Item {
         standardButtons: Dialog.Ok | Dialog.Cancel
 
         // NOT named reset(): Dialog already has a reset() signal, and shadowing it makes QML log an
-        // invalid-override warning on every load and permanently disables the built-in. Same reason
-        // LoginDialog uses restartFlow().
+        // invalid-override warning on every load and permanently disables the built-in.
         function restartFlow() {
             urlField.text = ""
             nameField.text = ""

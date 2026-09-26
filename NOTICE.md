@@ -45,8 +45,3 @@ AI Booster Qt client and were adapted here for Linux.
 
 Built against **Qt 6** (https://www.qt.io) under the LGPL-3.0. Qt is dynamically linked and
 is not redistributed in this repository.
-
-## OpenSSL
-
-Uses **OpenSSL** (https://www.openssl.org) under the Apache-2.0 licence, dynamically linked
-and not redistributed here.

@@ -16,7 +16,6 @@
 #include "models/proxylistmodel.h"
 #include "models/settingsmodel.h"
 #include "platform/SystemProxy.h"
-#include "services/AccountManager.h"
 
 namespace {
 
@@ -83,14 +82,12 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
 
-    auto *account = new AccountManager(&engine);
     auto *conn = new ConnectionModel(&engine);
     auto *proxies = new ProxyListModel(&engine);
     auto *profiles = new ProfileListModel(&engine);
     auto *logs = new LogsModel(&engine);
     auto *settings = new SettingsModel(&engine);
 
-    qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "AccountManager", account);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ConnectionModel", conn);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ProxyListModel", proxies);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ProfileListModel", profiles);

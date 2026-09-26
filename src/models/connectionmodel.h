@@ -7,7 +7,7 @@
 #include <QTimer>
 
 class ClashApi;
-class PremiumConfig;
+class FreeProfiles;
 class VpnCore;
 
 class ConnectionModel : public QObject
@@ -61,9 +61,9 @@ public:
     bool sessionNoticeIsError() const;
 
     Q_INVOKABLE void toggleConnection();
-    /// User-initiated re-attempt from the warning banner: tears the current session down (if
-    /// any) and re-runs the config-source picker, so a now-premium account lands on premium
-    /// servers. Only ever called from an explicit click — we never drop traffic on our own.
+    /// User-initiated re-attempt from the notice banner: tears the current session down (if
+    /// any) and re-runs the config-source picker. Only ever called from an explicit click —
+    /// we never drop traffic on our own.
     Q_INVOKABLE void retryConnection();
     /// The banner's ✕ — the user has read the notice.
     Q_INVOKABLE void dismissSessionNotice();
@@ -76,30 +76,19 @@ signals:
     /// The connect attempt failed. statusLog alone is not enough — nothing binds it, so a
     /// failed connect used to leave the button snapping back with no explanation at all.
     void connectionFailed(const QString &error);
-    /// A premium account could not get its config and is being routed over free servers.
-    /// The UI must show this — silently downgrading a paying customer is not acceptable.
-    void premiumFellBackToFree(const QString &error);
-    /// The subscription resolved to premium *after* this session had already started on the
-    /// free pool. Informational: the user decides whether to reconnect.
-    void premiumAvailableForReconnect();
 
 private:
-    /// Picks the config source: active user profile → premium config → free fallback.
+    /// Picks the config source: the active user profile, otherwise the free nodes.
     void startConnect();
     void connectFree();
     void onVpnConnected();
     void onVpnDisconnected();
     void onVpnError(const QString &error);
     void onVpnStatusMessage(const QString &message);
-    void onAccountChanged();
     void setSessionNotice(const QString &message, bool isError);
 
-    /// Auto Connect: dial out once at launch, after the subscription lookup has settled so a
-    /// premium account does not get parked on the free pool for the whole session.
-    void scheduleAutoConnect();
-    /// Remove the decrypted premium config from disk when the entitlement ends.
-    void discardPremiumConfigOnDisk();
-    void maybeAutoConnect();
+    /// Auto Connect: dial out once at launch when the setting is on.
+    void autoConnectAtLaunch();
 
     void resetStats();
     void startStatsPolling();
@@ -110,7 +99,7 @@ private:
     void lookupIpAddress(int endpointIndex = 0);
 
     VpnCore *m_vpnCore = nullptr;
-    PremiumConfig *m_premiumConfig = nullptr;
+    FreeProfiles *m_freeProfiles = nullptr;
     ClashApi *m_clashApi = nullptr;
     QNetworkAccessManager *m_ipLookup = nullptr;
     QTimer m_statsTimer;
@@ -121,17 +110,8 @@ private:
     bool m_havePreviousSample = false;
     /// The stats poll runs once a second; only the first failure of a streak is logged.
     bool m_statsFailureLogged = false;
-    /// True from launch until the one auto-connect attempt has been made (or abandoned), so a
-    /// later sign-in/sign-out cannot dial out on its own.
-    bool m_autoConnectPending = false;
     /// Name shown as the active proxy once the pending connect succeeds.
     QString m_pendingProxyName;
-    /// Whether the in-flight / current session came from the free fallback rather than from a
-    /// user-selected profile — only the former is worth offering a premium reconnect for.
-    bool m_pendingFreeFallback = false;
-    bool m_freeFallbackSession = false;
-    /// Premium flag last seen on AccountManager, to spot the false→true transition.
-    bool m_lastKnownPremium = false;
     /// Set by retryConnection() so the disconnect it triggers rolls straight into a connect.
     bool m_reconnectAfterDisconnect = false;
 

@@ -68,8 +68,8 @@ Item {
 
         Item { Layout.preferredHeight: 16 }
 
-        // The app takes recurring payments and collects an email address, so the policies
-        // governing both have to be reachable from inside the app, not only from the website.
+        // The free nodes are a service the operator runs, so the policies governing it are
+        // reachable from inside the app, not only from the website.
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: 20

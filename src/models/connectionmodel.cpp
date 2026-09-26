@@ -1,13 +1,10 @@
 #include "connectionmodel.h"
-#include <QDir>
-#include <QStandardPaths>
 #include "profilelistmodel.h"
 #include "proxylistmodel.h"
 #include "settingsmodel.h"
 #include "vpncore.h"
-#include "../services/AccountManager.h"
 #include "../services/ClashApi.h"
-#include "../services/PremiumConfig.h"
+#include "../services/FreeProfiles.h"
 
 #include <QDateTime>
 #include <QJsonDocument>
@@ -25,8 +22,6 @@ constexpr int kStatsIntervalMs = 1000;
 /// The clash API only exists once the core has finished starting; give it a moment before the
 /// first poll and before replaying the node selection.
 constexpr int kCoreSettleMs = 1500;
-/// Cap on how long Auto Connect waits for the subscription lookup before dialling anyway.
-constexpr int kAutoConnectWatchdogMs = 6000;
 
 QString formatBytes(qint64 bytes)
 {
@@ -60,7 +55,7 @@ ConnectionModel::ConnectionModel(QObject *parent)
 {
     s_instance = this;
     m_vpnCore = new VpnCore(this);
-    m_premiumConfig = new PremiumConfig(this);
+    m_freeProfiles = new FreeProfiles(this);
     m_clashApi = new ClashApi(this);
 
     connect(m_vpnCore, &VpnCore::connected, this, &ConnectionModel::onVpnConnected);
@@ -71,17 +66,9 @@ ConnectionModel::ConnectionModel(QObject *parent)
     m_statsTimer.setInterval(kStatsIntervalMs);
     connect(&m_statsTimer, &QTimer::timeout, this, &ConnectionModel::pollStats);
 
-    // /subscriptions/status answers 1-3 s after launch. If it upgrades the account while a
-    // free-fallback session is already up, say so instead of leaving a paying customer on the
-    // free pool for the rest of the session.
-    if (AccountManager *account = AccountManager::instance()) {
-        m_lastKnownPremium = account->premium();
-        connect(account, &AccountManager::changed, this, &ConnectionModel::onAccountChanged);
-    }
-
     // main.cpp builds SettingsModel and ProfileListModel after this one, so the auto-connect
     // decision has to wait for the event loop — every singleton exists by then.
-    QMetaObject::invokeMethod(this, [this]() { scheduleAutoConnect(); }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, [this]() { autoConnectAtLaunch(); }, Qt::QueuedConnection);
 }
 
 ConnectionModel::Status ConnectionModel::status() const { return m_status; }
@@ -155,75 +142,10 @@ void ConnectionModel::retryConnection()
     }
 }
 
-void ConnectionModel::onAccountChanged()
-{
-    AccountManager *account = AccountManager::instance();
-    if (!account)
-        return;
-
-    const bool premium = account->premium();
-    const bool becamePremium = premium && !m_lastKnownPremium;
-    const bool lostPremium = !premium && m_lastKnownPremium;
-    m_lastKnownPremium = premium;
-
-    if (becamePremium && m_status == Connected && m_freeFallbackSession) {
-        emit premiumAvailableForReconnect();
-        setSessionNotice(QStringLiteral("Your Premium subscription is active, but this session "
-                                        "started on the free pool. Reconnect to move onto Premium "
-                                        "servers."),
-                         false);
-    }
-
-    // The mirror case: the entitlement ended (lapse, sign-out, account deletion) while a session
-    // dialled on the premium config is still up. Nothing else notices, so without this the tunnel
-    // keeps using premium servers until the user happens to disconnect by hand.
-    if (lostPremium && m_status == Connected && m_activeProxyName == PremiumConfig::kProfileName)
-        setSessionNotice(QStringLiteral("Premium access ended, but this session is still running on "
-                                        "Premium servers. Reconnect to move onto the free pool."),
-                         false);
-
-    // Premium ending (lapse, sign-out, account deletion) has to take the decrypted premium config
-    // with it. VpnCore writes it to AppDataLocation/engine/config.json and only clears that
-    // directory on the NEXT connect, so leaving it behind kept a paid config usable afterwards.
-    if (lostPremium)
-        discardPremiumConfigOnDisk();
-
-    // Only relevant while the launch-time auto-connect is still waiting for the tier.
-    if (m_autoConnectPending && !account->busy())
-        maybeAutoConnect();
-}
-
-/// Erase the decrypted premium config written by the last connect. Safe while connected: the core
-/// already holds its own copy, so this only prevents a FUTURE run from reusing it.
-void ConnectionModel::discardPremiumConfigOnDisk()
-{
-    QDir(VpnCore::engineDir()).removeRecursively();
-}
-
-void ConnectionModel::scheduleAutoConnect()
+void ConnectionModel::autoConnectAtLaunch()
 {
     if (!SettingsModel::instance() || !SettingsModel::instance()->autoConnect())
         return;
-
-    m_autoConnectPending = true;
-
-    AccountManager *account = AccountManager::instance();
-    if (!account || !account->busy()) {
-        maybeAutoConnect();
-        return;
-    }
-    // onAccountChanged() fires as soon as the tier settles; this is only the backstop for a
-    // subscription lookup that never answers.
-    QTimer::singleShot(kAutoConnectWatchdogMs, this, [this]() { maybeAutoConnect(); });
-}
-
-void ConnectionModel::maybeAutoConnect()
-{
-    if (!m_autoConnectPending)
-        return;
-    m_autoConnectPending = false;
-
-    // The user may have connected by hand while the subscription lookup was still running.
     if (m_status != Disconnected)
         return;
 
@@ -234,69 +156,37 @@ void ConnectionModel::maybeAutoConnect()
 
 void ConnectionModel::startConnect()
 {
-    // 1. A profile the user added and selected always wins (like the mobile clients, where
-    //    "AiBooster Premium" is just another entry in the profile list).
+    // 1. A profile the user added and selected always wins.
     if (ProfileListModel *profiles = ProfileListModel::instance()) {
         const QString content = profiles->activeProfileContent();
         if (!content.trimmed().isEmpty()) {
             m_pendingProxyName = profiles->activeProfileName();
-            m_pendingFreeFallback = false;
             m_vpnCore->connectVpnWithConfig(content);
             return;
         }
     }
 
-    // 2. Premium accounts get the encrypted premium config (fetch → decrypt → sanitize).
-    AccountManager *account = AccountManager::instance();
-    if (account && account->premium()) {
-        onVpnStatusMessage(QStringLiteral("Fetching %1 config...").arg(PremiumConfig::kProfileName));
-        m_premiumConfig->fetch(
-            [this](const QString &config) {
-                if (m_status != Connecting)
-                    return; // the attempt was abandoned while the fetch ran
-                m_pendingProxyName = PremiumConfig::kProfileName;
-                m_pendingFreeFallback = false;
-                m_vpnCore->connectVpnWithConfig(config);
-            },
-            [this](const QString &error) {
-                if (m_status != Connecting)
-                    return;
-                // Keep the Connect button working: drop to the free tier for this session.
-                // Surface it — a paying user silently routed over free servers is worse than
-                // a visible failure.
-                emit premiumFellBackToFree(error);
-                setSessionNotice(QStringLiteral("Premium servers are unavailable (%1) — this "
-                                                "session is running on the free pool.").arg(error),
-                                 false);
-                onVpnStatusMessage(QStringLiteral("Premium config failed (%1), using free tier")
-                                       .arg(error));
-                connectFree();
-            });
-        return;
-    }
-
-    // 3. Logged out / free tier.
+    // 2. Otherwise the free nodes.
     connectFree();
 }
 
 void ConnectionModel::connectFree()
 {
     m_pendingProxyName = QStringLiteral("AiBooster Free");
-    m_pendingFreeFallback = true;
-    // NOT connectVpn(kFreeConfigUrl): that URL answers a profile INDEX, and handing the index
-    // to the core yields a config with zero outbounds — the core reports nothing and the app
-    // would claim "Connected" with no tunnel. fetchFree() resolves the index to a real
-    // subscription body first.
-    m_premiumConfig->fetchFree(
+    // NOT connectVpn(FreeProfiles::kPrimaryUrl): that URL answers a profile INDEX, and handing
+    // the index to the core yields a config with zero outbounds — the core reports nothing and
+    // the app would claim "Connected" with no tunnel. FreeProfiles::fetch() resolves the index
+    // to a real subscription body first.
+    m_freeProfiles->fetch(
         [this](const QString &config) {
             if (m_status != Connecting)
-                return;
+                return; // the attempt was abandoned while the fetch ran
             m_vpnCore->connectVpnWithConfig(config);
         },
         [this](const QString &error) {
             if (m_status != Connecting)
                 return;
-            onVpnError(QStringLiteral("Could not fetch the free config: %1").arg(error));
+            onVpnError(QStringLiteral("Could not fetch the free nodes: %1").arg(error));
         });
 }
 
@@ -304,15 +194,12 @@ void ConnectionModel::onVpnConnected()
 {
     m_activeProxyName = m_pendingProxyName.isEmpty() ? QStringLiteral("AiBooster VPN")
                                                      : m_pendingProxyName;
-    m_freeFallbackSession = m_pendingFreeFallback;
     m_activeProxyType = "Auto";
     m_activeProxyCountry = "Auto";
     m_ipAddress = QStringLiteral("Checking…");
     resetStats();
-    // A successful connect answers whatever the last failure was complaining about; the
-    // informational notices describe THIS session, so they stay.
-    if (m_sessionNoticeIsError)
-        setSessionNotice({}, false);
+    // A successful connect answers whatever the last failure was complaining about.
+    setSessionNotice({}, false);
     setStatus(Connected);
     emit statsChanged();
 
@@ -336,7 +223,6 @@ void ConnectionModel::onVpnDisconnected()
     m_activeProxyName.clear();
     m_activeProxyType.clear();
     m_activeProxyCountry.clear();
-    m_freeFallbackSession = false;
     setStatus(Disconnected);
     emit statsChanged();
 

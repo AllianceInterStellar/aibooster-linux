@@ -113,13 +113,6 @@ QString displayProxyType(const QString &type)
     return mapped.isEmpty() ? type.toUpper() : mapped;
 }
 
-/// Parity with iOS/Android: a node is premium when its tag carries the lock emoji or "premium".
-bool isPremiumTag(const QString &name)
-{
-    return name.contains(QString::fromUtf8("\xF0\x9F\x94\x92"))
-        || name.contains(QStringLiteral("premium"), Qt::CaseInsensitive);
-}
-
 QString countryFromKeywords(const QString &haystackLower)
 {
     static const QVector<QPair<QString, QString>> keywords = {
@@ -298,7 +291,6 @@ void finishNode(ProxyNode &node, int index)
     node.countryCode = detectCountryCode(node.name);
     if (node.countryCode.isEmpty())
         node.countryCode = detectCountryFromServer(node.address);
-    node.isPremium = isPremiumTag(node.name);
 }
 
 bool parseVmessNode(const QString &line, int index, ProxyNode *out)
@@ -559,7 +551,6 @@ QVariant ProxyListModel::data(const QModelIndex &index, int role) const
     case AddressRole: return p.address;
     case CountryCodeRole: return p.countryCode;
     case DelayRole: return p.delay;
-    case IsPremiumRole: return p.isPremium;
     case PortRole: return p.port;
     }
     return {};
@@ -574,7 +565,6 @@ QHash<int, QByteArray> ProxyListModel::roleNames() const
         {AddressRole, "address"},
         {CountryCodeRole, "countryCode"},
         {DelayRole, "delay"},
-        {IsPremiumRole, "isPremium"},
         {PortRole, "port"}
     };
 }

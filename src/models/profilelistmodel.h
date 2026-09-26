@@ -17,7 +17,6 @@ struct ProfileData {
     /// Raw subscription payload (engine JSON, a base64 blob or a list of vmess:// style links).
     QString content;
     bool isActive = false;
-    bool isPremium = false;
     double totalTrafficGB = 0;
     double usedTrafficGB = 0;
     /// -1 = unknown (the subscription carried no `expire`); ProfileTile hides the row for < 0.
@@ -62,7 +61,6 @@ public:
         NameRole,
         UrlRole,
         IsActiveRole,
-        IsPremiumRole,
         TotalTrafficRole,
         UsedTrafficRole,
         RemainingDaysRole,

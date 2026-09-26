@@ -18,13 +18,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev libgl1-mesa-dev \
-            libssl-dev
+            qt6-base-dev qt6-declarative-dev libgl1-mesa-dev
 
+      # The free-node endpoints are deployment configuration, kept out of the source and read
+      # from repository variables. A fork without them still builds, with the placeholders.
       - name: Configure
+        env:
+          AIBOOSTER_FREE_URL: ${{ vars.AIBOOSTER_FREE_URL }}
+          AIBOOSTER_FREE_BACKUP_URL: ${{ vars.AIBOOSTER_FREE_BACKUP_URL }}
         run: |
+          args=()
+          if [ -n "$AIBOOSTER_FREE_URL" ]; then
+            args+=("-DAIBOOSTER_FREE_URL=$AIBOOSTER_FREE_URL")
+          fi
+          if [ -n "$AIBOOSTER_FREE_BACKUP_URL" ]; then
+            args+=("-DAIBOOSTER_FREE_BACKUP_URL=$AIBOOSTER_FREE_BACKUP_URL")
+          fi
           cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            "${args[@]}"
 
       - name: Build
         run: cmake --build build --parallel
@@ -104,7 +116,7 @@ jobs:
           # run — and the proxy test skips itself when it finds no gsettings backend,
           # which is exactly the condition a CI runner can drift into. Requiring
           # "0 skipped" makes that a failure instead of a green tick over nothing.
-          for t in test_coreprocess test_systemproxy test_enginesettings test_deeplinks; do
+          for t in test_coreprocess test_systemproxy test_enginesettings test_deeplinks test_freeprofiles; do
             echo "── $t ─────────────────────────────────"
             QT_QPA_PLATFORM=offscreen dbus-run-session -- "./build/$t" 2>&1 | tee "$t.out"
             totals="$(grep -E '^Totals:' "$t.out" | tail -1)"
@@ -172,12 +184,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev libgl1-mesa-dev libssl-dev \
+            qt6-base-dev qt6-declarative-dev libgl1-mesa-dev \
             dpkg-dev
 
       - name: Build and stage
+        env:
+          AIBOOSTER_FREE_URL: ${{ vars.AIBOOSTER_FREE_URL }}
+          AIBOOSTER_FREE_BACKUP_URL: ${{ vars.AIBOOSTER_FREE_BACKUP_URL }}
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          args=()
+          if [ -n "$AIBOOSTER_FREE_URL" ]; then
+            args+=("-DAIBOOSTER_FREE_URL=$AIBOOSTER_FREE_URL")
+          fi
+          if [ -n "$AIBOOSTER_FREE_BACKUP_URL" ]; then
+            args+=("-DAIBOOSTER_FREE_BACKUP_URL=$AIBOOSTER_FREE_BACKUP_URL")
+          fi
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "${args[@]}"
           cmake --build build --parallel
           DESTDIR="$PWD/pkgroot" cmake --install build --prefix /usr
 

@@ -30,17 +30,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A release must reach real free nodes. Without these repository variables the build
+      # falls back to the example.invalid placeholders, and the packages would install a
+      # client that can only report it was never configured — so refuse before building.
+      - name: Check deployment configuration
+        env:
+          AIBOOSTER_FREE_URL: ${{ vars.AIBOOSTER_FREE_URL }}
+          AIBOOSTER_FREE_BACKUP_URL: ${{ vars.AIBOOSTER_FREE_BACKUP_URL }}
+        run: |
+          missing=0
+          for name in AIBOOSTER_FREE_URL AIBOOSTER_FREE_BACKUP_URL; do
+            value="${!name}"
+            if [ -z "$value" ] || [[ "$value" == *.invalid* ]]; then
+              echo "::error::Repository variable $name is missing or a placeholder (Settings → Secrets and variables → Actions → Variables)."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build dpkg-dev \
             qt6-base-dev qt6-declarative-dev libqt6opengl6-dev \
-            libgl1-mesa-dev libqt6svg6 libssl-dev
+            libgl1-mesa-dev libqt6svg6
 
       - name: Build the client
+        env:
+          AIBOOSTER_FREE_URL: ${{ vars.AIBOOSTER_FREE_URL }}
+          AIBOOSTER_FREE_BACKUP_URL: ${{ vars.AIBOOSTER_FREE_BACKUP_URL }}
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAIBOOSTER_BUILD_TESTS=OFF
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAIBOOSTER_BUILD_TESTS=OFF \
+            "-DAIBOOSTER_FREE_URL=$AIBOOSTER_FREE_URL" \
+            "-DAIBOOSTER_FREE_BACKUP_URL=$AIBOOSTER_FREE_BACKUP_URL"
           cmake --build build --parallel
           file build/aibooster
 
@@ -135,6 +160,36 @@ jobs:
 
       - name: Package .deb
         run: bash packaging/build-deb.sh "$PWD/pkgroot"
+
+      # This runner has every Qt development package, so it cannot tell whether the .deb declares
+      # what the app needs at runtime: 2.1.0 did not depend on qt6-qpa-plugins (the platform
+      # plugins and the TLS backend) and nothing here noticed. So install the package into an
+      # empty Ubuntu 22.04, recommends off, let it auto-connect, and put a request through the
+      # free nodes. A package that cannot do that on a clean machine must never be published.
+      - name: Install on a clean Ubuntu 22.04 and connect on the free nodes
+        run: |
+          DEB="$(ls dist/aibooster_*_*.deb)"
+          docker run --rm -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -c '
+            set -u
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends "/dist/$(basename "'"$DEB"'")" curl ca-certificates > /dev/null || exit 1
+            H=$(mktemp -d); mkdir -p "$H/.config/AiBooster"
+            printf "[settings]\nautoConnect=true\nsystemProxy=false\ntunMode=false\nmixedPort=23340\n" > "$H/.config/AiBooster/AiBooster.conf"
+            direct=$(curl -s -m 10 https://www.cloudflare.com/cdn-cgi/trace | sed -n "s/^ip=//p")
+            HOME=$H XDG_CONFIG_HOME=$H/.config XDG_DATA_HOME=$H/.local/share QT_QPA_PLATFORM=offscreen \
+              timeout 120s aibooster > "$H/app.log" 2>&1 &
+            via=""
+            for i in $(seq 1 30); do
+              sleep 3
+              via=$(curl -s -m 8 -x http://127.0.0.1:23340 https://www.cloudflare.com/cdn-cgi/trace | sed -n "s/^ip=//p")
+              [ -n "$via" ] && break
+            done
+            echo "direct exit: ${direct:-none}  through the free nodes: ${via:-none}"
+            if [ -z "$via" ] || [ "$via" = "$direct" ]; then
+              echo "::error::the installed package did not connect on the free nodes"; tail -40 "$H/app.log"; exit 1
+            fi
+          '
 
       - name: Portable tarball
         run: |

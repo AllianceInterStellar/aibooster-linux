@@ -339,7 +339,6 @@ QVariant ProfileListModel::data(const QModelIndex &index, int role) const
     case NameRole: return p.name;
     case UrlRole: return p.url;
     case IsActiveRole: return p.isActive;
-    case IsPremiumRole: return p.isPremium;
     case TotalTrafficRole: return formatTraffic(p.totalTrafficGB);
     case UsedTrafficRole: return formatTraffic(p.usedTrafficGB);
     case RemainingDaysRole: return p.remainingDays;
@@ -360,7 +359,6 @@ QHash<int, QByteArray> ProfileListModel::roleNames() const
         {NameRole, "name"},
         {UrlRole, "url"},
         {IsActiveRole, "isActive"},
-        {IsPremiumRole, "isPremium"},
         {TotalTrafficRole, "totalTraffic"},
         {UsedTrafficRole, "usedTraffic"},
         {RemainingDaysRole, "remainingDays"},
@@ -863,7 +861,6 @@ void ProfileListModel::load()
         p.url = obj.value(QStringLiteral("url")).toString();
         p.content = obj.value(QStringLiteral("content")).toString();
         p.isActive = obj.value(QStringLiteral("isActive")).toBool();
-        p.isPremium = obj.value(QStringLiteral("isPremium")).toBool();
         p.totalTrafficGB = obj.value(QStringLiteral("totalTrafficGB")).toDouble();
         p.usedTrafficGB = obj.value(QStringLiteral("usedTrafficGB")).toDouble();
         p.remainingDays = obj.value(QStringLiteral("remainingDays")).toInt(-1);
@@ -887,7 +884,6 @@ void ProfileListModel::save() const
         obj.insert(QStringLiteral("url"), p.url);
         obj.insert(QStringLiteral("content"), p.content);
         obj.insert(QStringLiteral("isActive"), p.isActive);
-        obj.insert(QStringLiteral("isPremium"), p.isPremium);
         obj.insert(QStringLiteral("totalTrafficGB"), p.totalTrafficGB);
         obj.insert(QStringLiteral("usedTrafficGB"), p.usedTrafficGB);
         obj.insert(QStringLiteral("remainingDays"), p.remainingDays);

@@ -14,7 +14,6 @@ Rectangle {
     property string type: ""
     property string countryCode: ""
     property int delay: -1
-    property bool isPremium: false
     property bool isSelected: false
 
     signal selected()
@@ -34,22 +33,11 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 2
 
-            Row {
-                spacing: 6
-                Text {
-                    text: tile.name
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: "#E5E7EB"
-                }
-                Image {
-                    visible: tile.isPremium
-                    source: "../icons/crown.svg"
-                    sourceSize.width: 13
-                    sourceSize.height: 13
-                    width: 13
-                    height: 13
-                }
+            Text {
+                text: tile.name
+                font.pixelSize: 13
+                font.weight: Font.Medium
+                color: "#E5E7EB"
             }
 
             Text {

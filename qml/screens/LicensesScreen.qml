@@ -69,7 +69,7 @@ Item {
 
             // Sections are written out rather than generated from a model. A Repeater
             // delegate inside an inline component is rejected by the Qt 6.2 this client
-            // supports, and four fixed entries do not need a model in the first place.
+            // supports, and three fixed entries do not need a model in the first place.
             SectionTitle { text: "AI Booster \u2014 Linux client" }
             SectionBody {
                 text: "This application. Licensed under the GNU General Public License, "
@@ -108,18 +108,6 @@ Item {
                 spacing: 14
                 LinkText { label: "qt.io"; url: "https://www.qt.io" }
                 LinkText { label: "LGPL-3.0"; url: "https://www.gnu.org/licenses/lgpl-3.0.html" }
-            }
-
-            SectionTitle { text: "OpenSSL" }
-            SectionBody {
-                text: "Used for the subscription payload decryption, under the Apache-2.0 "
-                      + "licence. Linked dynamically and not redistributed by us."
-            }
-            Flow {
-                width: column.width
-                spacing: 14
-                LinkText { label: "openssl.org"; url: "https://www.openssl.org" }
-                LinkText { label: "Apache-2.0"; url: "https://www.apache.org/licenses/LICENSE-2.0" }
             }
 
             Item { width: 1; height: 8 }

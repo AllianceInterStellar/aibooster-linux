@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.19)
-project(AiBoosterLinux VERSION 2.1.0 LANGUAGES CXX)
+project(AiBoosterLinux VERSION 2.2.0 LANGUAGES CXX)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR
@@ -23,32 +23,23 @@ if(COMMAND qt_standard_project_setup)
     qt_standard_project_setup()
 endif()
 
-# The subscription payload is AES-256-GCM; we decrypt it with OpenSSL's EVP interface.
-find_package(OpenSSL REQUIRED)
-
 # ── Deployment configuration ─────────────────────────────────────────────────────────
-# This client is the user interface for a subscription service. The endpoints and the
-# payload key below identify ONE operator and are deliberately absent from the source:
-# publishing the key would hand that operator's paid subscription data to everyone.
+# The free nodes come from ONE operator's service. Its endpoints are deployment
+# configuration, not client behaviour, and are deliberately absent from the source: a fork
+# points them at its own service, or leaves them out and uses only the profiles its users
+# import.
 #
-# A default build compiles and runs; it just cannot talk to anybody's service until these
-# are supplied, and it says so plainly instead of failing obscurely.
-set(AIBOOSTER_PREMIUM_AES_KEY_B64 "REPLACE_WITH_YOUR_BASE64_AES_256_KEY"
-    CACHE STRING "Base64 AES-256 key for the encrypted subscription payload")
-set(AIBOOSTER_PREMIUM_URL "https://example.invalid/?iso=1"
-    CACHE STRING "Primary premium subscription endpoint")
-set(AIBOOSTER_PREMIUM_BACKUP_URL "https://example.invalid/?iso=1"
-    CACHE STRING "Backup premium subscription endpoint")
+# A default build compiles and runs; it just cannot fetch free nodes until these are
+# supplied, and it says so plainly instead of failing obscurely.
 set(AIBOOSTER_FREE_URL "https://example.invalid/?type=free"
     CACHE STRING "Primary free profile endpoint")
 set(AIBOOSTER_FREE_BACKUP_URL "https://example.invalid/?type=free"
     CACHE STRING "Backup free profile endpoint")
-set(AIBOOSTER_API_BASE_URL "https://example.invalid"
-    CACHE STRING "Account/subscription API base URL")
-# Firebase Web API keys are public identifiers, not credentials — access is governed by
-# Firebase security rules. Parameterised so a fork points at its own project.
-set(AIBOOSTER_FIREBASE_API_KEY "REPLACE_WITH_YOUR_FIREBASE_WEB_API_KEY"
-    CACHE STRING "Firebase Web API key")
+if(AIBOOSTER_FREE_URL MATCHES "\\.invalid([/:?]|$)"
+   AND AIBOOSTER_FREE_BACKUP_URL MATCHES "\\.invalid([/:?]|$)")
+    message(STATUS "AIBOOSTER_FREE_URL is not set: this build cannot fetch free nodes (profiles "
+                   "users import still work). See README.md -> Deployment configuration.")
+endif()
 
 qt_add_executable(aibooster
     src/main.cpp
@@ -62,11 +53,8 @@ qt_add_executable(aibooster
     src/models/proxylistmodel.cpp
     src/models/settingsmodel.cpp
     src/models/vpncore.cpp
-    src/services/AccountManager.cpp
-    src/services/ApiClient.cpp
     src/services/ClashApi.cpp
-    src/services/FirebaseAuth.cpp
-    src/services/PremiumConfig.cpp
+    src/services/FreeProfiles.cpp
 )
 
 qt_add_qml_module(aibooster
@@ -76,7 +64,6 @@ qt_add_qml_module(aibooster
         qml/Main.qml
         qml/components/SpaceBackground.qml
         qml/components/ConnectionButton.qml
-        qml/components/LoginDialog.qml
         qml/components/ActiveProxyCard.qml
         qml/components/ProxyTile.qml
         qml/components/ProfileTile.qml
@@ -103,31 +90,26 @@ qt_add_qml_module(aibooster
         qml/icons/about.svg
         qml/icons/shield.svg
         qml/icons/shield-check.svg
-        qml/icons/crown.svg
 )
 
 target_compile_definitions(aibooster PRIVATE
     AIBOOSTER_VERSION="${PROJECT_VERSION}"
-    AIBOOSTER_PREMIUM_AES_KEY_B64="${AIBOOSTER_PREMIUM_AES_KEY_B64}"
-    AIBOOSTER_PREMIUM_URL="${AIBOOSTER_PREMIUM_URL}"
-    AIBOOSTER_PREMIUM_BACKUP_URL="${AIBOOSTER_PREMIUM_BACKUP_URL}"
     AIBOOSTER_FREE_URL="${AIBOOSTER_FREE_URL}"
     AIBOOSTER_FREE_BACKUP_URL="${AIBOOSTER_FREE_BACKUP_URL}"
-    AIBOOSTER_API_BASE_URL="${AIBOOSTER_API_BASE_URL}"
-    AIBOOSTER_FIREBASE_API_KEY="${AIBOOSTER_FIREBASE_API_KEY}"
 )
 
 target_link_libraries(aibooster PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Network
-    OpenSSL::Crypto
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────────
 # Exercise the two subsystems that cannot be checked by compiling: engine supervision
 # (against a stub engine, so no GPL engine binary is needed) and the desktop-proxy round
 # trip (which writes machine-wide state, so the test that matters is that it is restored).
+# Plus the parsers that decide what reaches the engine: deep links, engine settings and
+# the free-node index.
 option(AIBOOSTER_BUILD_TESTS "Build the test suite" ON)
 
 if(AIBOOSTER_BUILD_TESTS)
@@ -166,6 +148,20 @@ if(AIBOOSTER_BUILD_TESTS)
     )
     target_link_libraries(test_systemproxy PRIVATE Qt6::Test)
     add_test(NAME systemproxy COMMAND test_systemproxy)
+
+    # Against a loopback HTTP server, never the real endpoints — so the cache variables are
+    # compiled in only because the source needs them, and the result does not depend on them.
+    qt_add_executable(test_freeprofiles
+        tests/test_freeprofiles.cpp
+        src/services/FreeProfiles.cpp
+        src/services/FreeProfiles.h
+    )
+    target_compile_definitions(test_freeprofiles PRIVATE
+        AIBOOSTER_FREE_URL="${AIBOOSTER_FREE_URL}"
+        AIBOOSTER_FREE_BACKUP_URL="${AIBOOSTER_FREE_BACKUP_URL}"
+    )
+    target_link_libraries(test_freeprofiles PRIVATE Qt6::Test Qt6::Network)
+    add_test(NAME freeprofiles COMMAND test_freeprofiles)
 endif()
 
 # ── Install (XDG layout) ─────────────────────────────────────────────────────────────

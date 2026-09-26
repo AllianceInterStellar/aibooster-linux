@@ -20,7 +20,6 @@ struct ProxyNode {
     QString countryCode;
     /// -1 = not tested yet (ProxyTile renders "—"), 9999 = unreachable.
     int delay = -1;
-    bool isPremium = false;
 };
 
 class ProxyListModel : public QAbstractListModel
@@ -41,7 +40,6 @@ public:
         AddressRole,
         CountryCodeRole,
         DelayRole,
-        IsPremiumRole,
         PortRole
     };
 

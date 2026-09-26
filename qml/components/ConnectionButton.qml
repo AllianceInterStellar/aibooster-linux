@@ -10,11 +10,6 @@ Item {
     property bool isConnected: status === 2
     property bool isConnecting: status === 1
     property bool isDisconnecting: status === 3
-    /// Set while the account's tier is still unknown — connecting now would pick the wrong
-    /// config source. `enabled` is Item's own and propagates to the MouseArea below.
-    property bool checkingSubscription: false
-
-    opacity: enabled ? 1.0 : 0.55
 
     signal clicked()
 
@@ -71,8 +66,6 @@ Item {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: {
-                    if (connBtn.checkingSubscription)
-                        return "Checking subscription…"
                     switch (connBtn.status) {
                         case 0: return "Tap to Connect"
                         case 1: return "Connecting..."

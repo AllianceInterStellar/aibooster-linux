@@ -140,7 +140,6 @@ Item {
                 type: model.type
                 countryCode: model.countryCode
                 delay: model.delay
-                isPremium: model.isPremium
                 isSelected: model.proxyId === ProxyListModel.selectedId
 
                 onSelected: ProxyListModel.selectProxy(model.proxyId)

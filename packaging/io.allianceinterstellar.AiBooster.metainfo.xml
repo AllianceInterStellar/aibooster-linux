@@ -8,9 +8,9 @@
 
   <description>
     <p>
-      The Linux desktop client for AI Booster. It manages subscriptions and profiles,
-      selects servers, shows live traffic and logs, and points the desktop's proxy
-      settings at the local tunnel.
+      The Linux desktop client for AI Booster. It connects through free nodes out of
+      the box or through profiles you import, selects servers, shows live traffic and
+      logs, and points the desktop's proxy settings at the local tunnel.
     </p>
     <p>
       This package is the user interface only. The tunnelling engine is a separate

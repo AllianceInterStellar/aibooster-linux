@@ -86,7 +86,11 @@ DEPENDS="$(printf '%s\n' "${DEPLIST[@]}" | paste -sd, - | sed 's/,/, /g')"
 # ldd walk above cannot see them. Missing these produces a window that opens blank.
 # libqt6svg6 carries the SVG image-format plugin. The navigation icons are SVG, and a
 # missing plugin renders every one of them as a blank square.
-QML_DEPENDS="libqt6svg6, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtqml-workerscript"
+# qt6-qpa-plugins holds the platform plugins (xcb, wayland, offscreen) the window cannot open
+# without, and the TLS backend every HTTPS request — the free nodes included — goes through.
+# It is loaded at runtime too, and on Ubuntu 22.04 no runtime Qt package pulls it in; only
+# qt6-base-dev does, which is why no build machine ever missed it.
+QML_DEPENDS="qt6-qpa-plugins, libqt6svg6, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtqml-workerscript"
 
 cat > "$STAGE/DEBIAN/control" <<CONTROL
 Package: aibooster
@@ -99,8 +103,9 @@ Recommends: gsettings-desktop-schemas
 Maintainer: AllianceInterStellar <support@allianceinterstellar.com>
 Homepage: https://allianceinterstellar.com
 Description: AI Booster VPN client (user interface)
- Desktop client for the AI Booster network: subscriptions and profiles, server
- selection, live traffic and logs, and desktop proxy integration.
+ Desktop client for the AI Booster network: free nodes out of the box, profiles
+ imported by URL or link, server selection, live traffic and logs, and desktop
+ proxy integration.
  .
  This package contains the user interface only. The tunnelling engine is a
  separate program that the client launches and communicates with over loopback

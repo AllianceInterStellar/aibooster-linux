@@ -36,15 +36,15 @@ public:
     void connectVpn(const QString &subscriptionUrl);
 
     /// Connect from config content already in hand (an active profile's stored payload or
-    /// the decrypted premium config) — same pipeline as connectVpn minus the download.
+    /// the free nodes' subscription body) — same pipeline as connectVpn minus the download.
     void connectVpnWithConfig(const QString &configContent);
 
     void disconnectVpn();
 
-    /// Where the engine's per-run files live. The ONLY definition of these paths — three
-    /// separate call sites used to hardcode them, so renaming the directory silently broke
-    /// the premium-config cleanup (a lapsed subscriber kept a working paid config) and the
-    /// proxy list's config reader. Go through these instead of rebuilding the path.
+    /// Where the engine's per-run files live. The ONLY definition of these paths — the proxy
+    /// list reads the running config back from here, and a second hardcoded copy silently
+    /// breaks that reader the day the directory is renamed. Go through these instead of
+    /// rebuilding the path.
     static QString engineDir();
     static QString runningConfigPath();
 

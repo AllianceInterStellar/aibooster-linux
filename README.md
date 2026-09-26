@@ -20,7 +20,9 @@ engine's own source is at
 
 ## What it does
 
-- Subscriptions and profiles — import by URL, store, switch between them
+- Free nodes out of the box — used whenever no profile of your own is active
+- Profiles of your own — import by subscription URL, deep link, config link or raw config;
+  store, update and switch between them
 - Server list with latency, plus the engine's own selector/urltest groups
 - Live traffic and connection counts from the engine's Clash API
 - Engine log stream in-app
@@ -72,8 +74,8 @@ kwriteconfig6 --file kioslaverc --group 'Proxy Settings' --key ProxyType 0   # K
 
 ## Building
 
-Requires Qt 6.2+, OpenSSL and a C++17 compiler. Built and run on Ubuntu 22.04 (Qt 6.2)
-and Ubuntu 24.04 (Qt 6.4).
+Requires Qt 6.2+ and a C++17 compiler. Built and run on Ubuntu 22.04 (Qt 6.2) and
+Ubuntu 24.04 (Qt 6.4).
 
 On Ubuntu 22.04, `libqt6opengl6-dev` is required explicitly — 24.04 pulls it in for you, and
 without it CMake reports Qt6Quick as missing while its config file plainly exists.
@@ -82,11 +84,11 @@ without it CMake reports Qt6Quick as missing while its config file plainly exist
 # Debian / Ubuntu
 sudo apt install build-essential cmake ninja-build \
     qt6-base-dev qt6-declarative-dev libqt6opengl6-dev libgl1-mesa-dev \
-    libqt6svg6 libssl-dev
+    libqt6svg6
 
 # Fedora
 sudo dnf install gcc-c++ cmake ninja-build \
-    qt6-qtbase-devel qt6-qtdeclarative-devel openssl-devel
+    qt6-qtbase-devel qt6-qtdeclarative-devel
 
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
@@ -95,28 +97,26 @@ cmake --build build --parallel
 
 ### Deployment configuration
 
-The client is the front end for a subscription service. The endpoints and the payload
-decryption key identify **one operator** and are deliberately not in this source tree —
-publishing the key would hand that operator's paid subscription data to anyone who cloned
-the repository.
-
-A default build compiles and runs. It cannot talk to a service until you supply your own,
-and it says so plainly rather than failing obscurely:
+The free nodes come from **one operator's** service. Its two endpoints identify that
+operator and are deliberately not in this source tree; supply them at configure time:
 
 ```bash
 cmake -B build -G Ninja \
-  -DAIBOOSTER_PREMIUM_AES_KEY_B64=<base64 AES-256 key> \
-  -DAIBOOSTER_PREMIUM_URL=https://…/?iso=1 \
-  -DAIBOOSTER_PREMIUM_BACKUP_URL=https://…/?iso=1 \
   -DAIBOOSTER_FREE_URL=https://…/?type=free \
-  -DAIBOOSTER_FREE_BACKUP_URL=https://…/?type=free \
-  -DAIBOOSTER_API_BASE_URL=https://… \
-  -DAIBOOSTER_FIREBASE_API_KEY=<firebase web api key>
+  -DAIBOOSTER_FREE_BACKUP_URL=https://…/?type=free
 ```
 
-(The Firebase Web API key is a public project identifier, not a credential — access is
-governed by Firebase security rules. It is parameterised so a fork points at its own
-project.)
+Each answers an index, `{"data":{"profiles":[{"sublink":…}]}}`; the client fetches the first
+profile's `sublink` for the nodes themselves, and tries the backup when the primary fails.
+
+A default build compiles and runs without them. Profiles you import work as usual; connecting
+with none active says plainly that the build has no free-node endpoint, rather than failing
+obscurely.
+
+The CI workflows pass the same two values from the repository **variables**
+`AIBOOSTER_FREE_URL` and `AIBOOSTER_FREE_BACKUP_URL` (Settings → Secrets and variables →
+Actions → Variables). A fork without them still builds, with the placeholders; the release
+workflow refuses to publish without them.
 
 ### The engine
 

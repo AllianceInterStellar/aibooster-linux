@@ -6,13 +6,10 @@ Rectangle {
     height: 80
     radius: 12
     color: isActive ? "#1A1640" : "#0F0D20"
-    border.width: isPremium ? 1 : 0
-    border.color: "#C8A24C"
 
     property string profileName: ""
     property string url: ""
     property bool isActive: false
-    property bool isPremium: false
     property real trafficProgress: 0.0
     property int remainingDays: -1
     property string usedTrafficStr: ""
@@ -35,7 +32,7 @@ Rectangle {
 
             Image {
                 anchors.centerIn: parent
-                source: tile.isPremium ? "../icons/crown.svg" : "../icons/profiles.svg"
+                source: "../icons/profiles.svg"
                 sourceSize.width: 20
                 sourceSize.height: 20
                 width: 20

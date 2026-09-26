@@ -15,9 +15,8 @@ Item {
         anchors.margins: 32
         spacing: 20
 
-        // Everything the user has to be told about the session: a failed connect, a paying
-        // customer routed over free servers, or a subscription that only landed after the
-        // session started. All of them come with a one-click way out.
+        // What the user has to be told about the session — why a connect failed — with a
+        // one-click way out.
         Rectangle {
             id: noticeBanner
 
@@ -110,10 +109,6 @@ Item {
         C.ConnectionButton {
             Layout.alignment: Qt.AlignHCenter
             status: ConnectionModel.status
-            // The subscription answers 1-3 s after launch; connecting before it does would
-            // pick the free pool for an account that is actually premium.
-            checkingSubscription: AccountManager.busy && ConnectionModel.status === 0
-            enabled: !checkingSubscription
             onClicked: ConnectionModel.toggleConnection()
         }
 
