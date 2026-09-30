@@ -101,6 +101,28 @@ qt_add_qml_module(aibooster
         qml/icons/tray-on.svg
 )
 
+# ── Translations ─────────────────────────────────────────────────────────────────────
+# English is the source language. Each i18n/aibooster_<lang>.ts is compiled to a .qm and
+# embedded under :/i18n, where main.cpp's applyLanguage() looks. Linguist is optional: a
+# build without it is English-only rather than failing.
+#
+# After changing user-visible strings, refresh the .ts files (then translate the new
+# entries, e.g. in Qt Linguist):
+#   lupdate -locations none -no-obsolete -source-language en src qml \
+#       -ts i18n/aibooster_zh_CN.ts
+option(AIBOOSTER_REQUIRE_TRANSLATIONS
+       "Fail instead of building English-only when Linguist is missing (release builds)" OFF)
+find_package(Qt6 QUIET COMPONENTS LinguistTools)
+if(Qt6LinguistTools_FOUND)
+    qt_add_translations(aibooster TS_FILES i18n/aibooster_zh_CN.ts)
+elseif(AIBOOSTER_REQUIRE_TRANSLATIONS)
+    message(FATAL_ERROR "Qt6 LinguistTools not found, and AIBOOSTER_REQUIRE_TRANSLATIONS is on. "
+                        "Install qt6-tools-dev and qt6-l10n-tools.")
+else()
+    message(WARNING "Qt6 LinguistTools not found: building without translations (English "
+                    "only). Install qt6-tools-dev and qt6-l10n-tools to include them.")
+endif()
+
 target_compile_definitions(aibooster PRIVATE
     AIBOOSTER_VERSION="${PROJECT_VERSION}"
     AIBOOSTER_FREE_URL="${AIBOOSTER_FREE_URL}"

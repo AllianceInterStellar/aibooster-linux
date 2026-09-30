@@ -543,7 +543,7 @@ void ProxyListModel::applySelectionToCore()
         [this, group, name](const QStringList &members) {
             const QString tag = resolveCoreTag(name, members);
             if (tag.isEmpty()) {
-                emit selectionFailed(QStringLiteral(
+                emit selectionFailed(tr(
                     "The running tunnel has no node called \"%1\" — reconnect to pick up the "
                     "current profile.").arg(name));
                 return;
@@ -553,12 +553,12 @@ void ProxyListModel::applySelectionToCore()
                 [this, name]() { emit selectionApplied(name); },
                 [this, name](const QString &error) {
                     emit selectionFailed(
-                        QStringLiteral("Could not switch to \"%1\": %2").arg(name, error));
+                        tr("Could not switch to \"%1\": %2").arg(name, error));
                 });
         },
         [this, name](const QString &error) {
             emit selectionFailed(
-                QStringLiteral("Could not switch to \"%1\": %2").arg(name, error));
+                tr("Could not switch to \"%1\": %2").arg(name, error));
         });
 }
 

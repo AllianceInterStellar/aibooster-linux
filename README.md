@@ -29,6 +29,8 @@ engine's own source is at
 - System tray icon: connection state at a glance, connect/disconnect from its menu, and the
   app keeps running there when the window is closed (KDE, and GNOME with the AppIndicator
   extension; elsewhere closing the window quits as before)
+- English and Simplified Chinese (简体中文) — follows the system language, or pick one under
+  Settings → Language; it switches without a restart
 - Automatic reconnect when an established tunnel drops — backing off from 2 s to 60 s over
   five attempts, and waiting for the network rather than retrying while offline. A connect
   that never succeeded is not retried
@@ -90,11 +92,11 @@ without it CMake reports Qt6Quick as missing while its config file plainly exist
 # Debian / Ubuntu
 sudo apt install build-essential cmake ninja-build \
     qt6-base-dev qt6-declarative-dev libqt6opengl6-dev libgl1-mesa-dev \
-    libqt6svg6
+    libqt6svg6 qt6-tools-dev qt6-l10n-tools
 
 # Fedora
 sudo dnf install gcc-c++ cmake ninja-build \
-    qt6-qtbase-devel qt6-qtdeclarative-devel
+    qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qttools-devel
 
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel

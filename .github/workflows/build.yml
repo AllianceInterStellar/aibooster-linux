@@ -18,7 +18,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev libgl1-mesa-dev
+            qt6-base-dev qt6-declarative-dev libgl1-mesa-dev \
+            qt6-tools-dev qt6-l10n-tools
 
       # The free-node endpoints are deployment configuration, kept out of the source and read
       # from repository variables. A fork without them still builds, with the placeholders.
@@ -36,6 +37,7 @@ jobs:
           fi
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DAIBOOSTER_REQUIRE_TRANSLATIONS=ON \
             "${args[@]}"
 
       - name: Build
@@ -100,6 +102,25 @@ jobs:
             fi
           done
           [ "$fail" -eq 0 ] && echo "qmllint clean." || exit 1
+
+      # Every user-visible string must be in the .ts files and translated. Re-extract from
+      # the tree as it is now; a string added without running lupdate, or left untranslated,
+      # shows up as unfinished.
+      - name: Check translations are complete
+        run: |
+          LUPDATE=$(command -v lupdate6 || echo /usr/lib/qt6/bin/lupdate)
+          LRELEASE=$(command -v lrelease6 || echo /usr/lib/qt6/bin/lrelease)
+          for ts in i18n/*.ts; do
+            cp "$ts" "$RUNNER_TEMP/check.ts"
+            "$LUPDATE" -locations none -no-obsolete -source-language en src qml \
+              -ts "$RUNNER_TEMP/check.ts"
+            out=$("$LRELEASE" "$RUNNER_TEMP/check.ts" -qm "$RUNNER_TEMP/check.qm")
+            echo "$out"
+            if ! echo "$out" | grep -q " 0 unfinished"; then
+              echo "::error file=$ts::untranslated strings — run lupdate (see CMakeLists.txt) and translate them"
+              exit 1
+            fi
+          done
 
       # Engine supervision against a stub engine, and the desktop-proxy round trip.
       # dbus-run-session gives gsettings a session bus; without one the GNOME backend is
@@ -186,7 +207,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build \
             qt6-base-dev qt6-declarative-dev libgl1-mesa-dev \
-            dpkg-dev
+            qt6-tools-dev qt6-l10n-tools dpkg-dev
 
       - name: Build and stage
         env:

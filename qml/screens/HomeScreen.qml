@@ -71,7 +71,7 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: "Retry"
+                        text: qsTr("Retry")
                         font.pixelSize: 12
                         font.weight: Font.Medium
                         color: retryArea.containsMouse ? "#FFFFFF" : "#C4B5FD"
@@ -137,7 +137,7 @@ Item {
                 spacing: 2
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "↑ Upload"
+                    text: qsTr("↑ Upload")
                     font.pixelSize: 11
                     color: "#9CA3AF"
                 }
@@ -160,7 +160,7 @@ Item {
                 spacing: 2
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "↓ Download"
+                    text: qsTr("↓ Download")
                     font.pixelSize: 11
                     color: "#9CA3AF"
                 }
@@ -183,7 +183,7 @@ Item {
         Text {
             Layout.alignment: Qt.AlignHCenter
             visible: ConnectionModel.status === 2
-            text: "IP: " + ConnectionModel.ipAddress
+            text: qsTr("IP: %1").arg(ConnectionModel.ipAddress)
             font.pixelSize: 12
             color: "#6B7280"
         }

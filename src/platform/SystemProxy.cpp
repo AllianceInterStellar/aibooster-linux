@@ -371,7 +371,7 @@ bool SystemProxy::restoreKde(const QJsonObject &saved)
 bool SystemProxy::doApply(const QString &host, quint16 port)
 {
     if (m_backend == None) {
-        setLastError(QStringLiteral(
+        setLastError(tr(
             "This desktop has no proxy settings this client knows how to drive, so the "
             "system proxy was left alone. Point your browser at %1:%2 manually.")
                           .arg(host)
@@ -398,7 +398,7 @@ bool SystemProxy::doApply(const QString &host, quint16 port)
                               : m_backend == GSettings ? captureGSettings()
                                                        : captureKde();
     if (!reusePending && !writeState(saved)) {
-        setLastError(QStringLiteral("Could not save the current proxy settings to %1; "
+        setLastError(tr("Could not save the current proxy settings to %1; "
                                     "refusing to change them.")
                          .arg(statePath()));
         return false;
@@ -406,7 +406,7 @@ bool SystemProxy::doApply(const QString &host, quint16 port)
 
     const bool ok = m_backend == GSettings ? applyGSettings(host, port) : applyKde(host, port);
     if (!ok) {
-        setLastError(QStringLiteral("Failed to set the system proxy via %1.").arg(backendName()));
+        setLastError(tr("Failed to set the system proxy via %1.").arg(backendName()));
         // Undo whatever partially landed. The state file goes only once that worked: it is the
         // one record of the settings to go back to.
         const bool restored =

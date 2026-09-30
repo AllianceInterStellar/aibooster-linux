@@ -69,14 +69,14 @@ void VpnCore::connectVpnWithConfig(const QString &configContent)
     if (m_coreStatus == Running || m_coreStatus == Starting || m_coreStatus == Stopping) {
         // Returning quietly would leave the caller stuck on "Connecting" for ever.
         m_lastError = m_coreStatus == Stopping
-            ? QStringLiteral("The previous connection is still shutting down")
-            : QStringLiteral("A connection attempt is already in progress");
+            ? tr("The previous connection is still shutting down")
+            : tr("A connection attempt is already in progress");
         emit errorOccurred(m_lastError);
         return;
     }
 
     if (configContent.trimmed().isEmpty()) {
-        fail(QStringLiteral("Empty config content"));
+        fail(tr("Empty config content"));
         return;
     }
 
@@ -121,14 +121,14 @@ void VpnCore::launchEngine(const QString &configContent)
     // VPN client "connected with no tunnel" is the worst possible outcome: the user believes
     // they are protected while their traffic is in the clear.
     if (!SubscriptionParser::isUsableConfig(config)) {
-        fail(QStringLiteral("The server returned something that is not a usable VPN config"));
+        fail(tr("The server returned something that is not a usable VPN config"));
         return;
     }
 
     const QString workingDir = engineDir();
     // Owner-only: the config carries the user's node credentials.
     if (!PrivateFiles::ensureDir(workingDir)) {
-        fail(QStringLiteral("Could not create the engine directory at %1").arg(workingDir));
+        fail(tr("Could not create the engine directory at %1").arg(workingDir));
         return;
     }
 

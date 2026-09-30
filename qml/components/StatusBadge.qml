@@ -22,10 +22,10 @@ Rectangle {
         anchors.centerIn: parent
         text: {
             switch (badge.status) {
-                case "connected":     return "Connected"
-                case "connecting":    return "Connecting"
-                case "disconnecting": return "Disconnecting"
-                default:              return "Disconnected"
+                case "connected":     return qsTr("Connected")
+                case "connecting":    return qsTr("Connecting")
+                case "disconnecting": return qsTr("Disconnecting")
+                default:              return qsTr("Disconnected")
             }
         }
         font.pixelSize: 11

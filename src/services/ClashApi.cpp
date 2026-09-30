@@ -67,7 +67,7 @@ void ClashApi::fetchTraffic(std::function<void(Traffic)> onSuccess,
         }
         const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
         if (!root.contains(QStringLiteral("uploadTotal"))) {
-            if (onError) onError(QStringLiteral("clash API returned no traffic counters"));
+            if (onError) onError(tr("clash API returned no traffic counters"));
             return;
         }
         Traffic traffic;
@@ -95,7 +95,7 @@ void ClashApi::fetchGroupMembers(const QString &group,
             QJsonDocument::fromJson(reply->readAll()).object().value(QStringLiteral("all")).toArray();
         if (all.isEmpty()) {
             if (onError)
-                onError(QStringLiteral("the core reports no selectable nodes in \"%1\"").arg(group));
+                onError(tr("the core reports no selectable nodes in \"%1\"").arg(group));
             return;
         }
         QStringList members;
@@ -127,7 +127,7 @@ void ClashApi::selectOutbound(const QString &group, const QString &tag,
             // 404 here means the core does not know that tag — usually a profile edited after
             // connecting. Say so instead of pretending the switch happened.
             if (onError)
-                onError(QStringLiteral("the core rejected \"%1\" (HTTP %2)").arg(tag).arg(status));
+                onError(tr("the core rejected \"%1\" (HTTP %2)").arg(tag).arg(status));
             return;
         }
         if (onError) onError(reply->errorString());

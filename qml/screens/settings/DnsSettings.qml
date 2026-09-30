@@ -42,7 +42,7 @@ Item {
             }
 
             Text {
-                text: "DNS Settings"
+                text: qsTr("DNS Settings")
                 font.pixelSize: 20
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -62,8 +62,8 @@ Item {
                 anchors.margins: 20
                 spacing: 16
 
-                DnsField { label: "Remote DNS"; value: SettingsModel.remoteDns; onEdited: function(v) { SettingsModel.remoteDns = v } }
-                DnsField { label: "Direct DNS"; value: SettingsModel.directDns; onEdited: function(v) { SettingsModel.directDns = v } }
+                DnsField { label: qsTr("Remote DNS"); value: SettingsModel.remoteDns; onEdited: function(v) { SettingsModel.remoteDns = v } }
+                DnsField { label: qsTr("Direct DNS"); value: SettingsModel.directDns; onEdited: function(v) { SettingsModel.directDns = v } }
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -71,7 +71,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: "Enable Fake DNS"
+                        text: qsTr("Enable Fake DNS")
                         font.pixelSize: 14
                         color: "#D1D5DB"
                     }

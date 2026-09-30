@@ -10,7 +10,7 @@ ApplicationWindow {
     minimumWidth: 860
     minimumHeight: 580
     visible: true
-    title: "AiBooster VPN"
+    title: qsTr("AiBooster VPN")
     color: "#000000"
 
     property int currentIndex: 0
@@ -31,12 +31,12 @@ ApplicationWindow {
         // Vector icons shipped in the binary, not emoji. Emoji live in the astral plane and
         // a minimal Linux install has no font covering them, so the whole navigation bar
         // rendered as empty boxes on Ubuntu 22.04 — verified, not theoretical.
-        { icon: "icons/home.svg", label: "Home" },
-        { icon: "icons/proxies.svg", label: "Proxies" },
-        { icon: "icons/profiles.svg", label: "Profiles" },
-        { icon: "icons/settings.svg", label: "Settings" },
-        { icon: "icons/logs.svg", label: "Logs" },
-        { icon: "icons/about.svg", label: "About" }
+        { icon: "icons/home.svg", label: qsTr("Home") },
+        { icon: "icons/proxies.svg", label: qsTr("Proxies") },
+        { icon: "icons/profiles.svg", label: qsTr("Profiles") },
+        { icon: "icons/settings.svg", label: qsTr("Settings") },
+        { icon: "icons/logs.svg", label: qsTr("Logs") },
+        { icon: "icons/about.svg", label: qsTr("About") }
     ]
 
     RowLayout {

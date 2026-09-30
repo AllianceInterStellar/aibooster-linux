@@ -31,7 +31,7 @@ Item {
                     Layout.margins: 24
 
                     Text {
-                        text: "Settings"
+                        text: qsTr("Settings")
                         font.pixelSize: 22
                         font.weight: Font.Bold
                         color: "#E9D5FF"
@@ -39,28 +39,40 @@ Item {
                 }
 
                 SettingsSection {
-                    title: "General"
+                    title: qsTr("General")
 
-                    SettingsToggle { label: "System Proxy"; checked: SettingsModel.systemProxy; onToggled: SettingsModel.systemProxy = checked }
-                    SettingsToggle { label: "TUN Mode"; checked: SettingsModel.tunMode; onToggled: SettingsModel.tunMode = checked }
-                    SettingsToggle { label: "Auto Connect"; checked: SettingsModel.autoConnect; onToggled: SettingsModel.autoConnect = checked }
-                    SettingsToggle { label: "Auto Reconnect"; checked: SettingsModel.autoReconnect; onToggled: SettingsModel.autoReconnect = checked }
+                    SettingsToggle { label: qsTr("System Proxy"); checked: SettingsModel.systemProxy; onToggled: SettingsModel.systemProxy = checked }
+                    SettingsToggle { label: qsTr("TUN Mode"); checked: SettingsModel.tunMode; onToggled: SettingsModel.tunMode = checked }
+                    SettingsToggle { label: qsTr("Auto Connect"); checked: SettingsModel.autoConnect; onToggled: SettingsModel.autoConnect = checked }
+                    SettingsToggle { label: qsTr("Auto Reconnect"); checked: SettingsModel.autoReconnect; onToggled: SettingsModel.autoReconnect = checked }
                     // Only where the desktop has a tray; elsewhere closing always quits.
-                    SettingsToggle { visible: Tray.available; label: "Keep Running in Tray"; checked: SettingsModel.closeToTray; onToggled: SettingsModel.closeToTray = checked }
+                    SettingsToggle { visible: Tray.available; label: qsTr("Keep Running in Tray"); checked: SettingsModel.closeToTray; onToggled: SettingsModel.closeToTray = checked }
                     // No "Per-App Proxy" here: per-process routing would have to go through
                     // the engine's rule list, and that whole branch is commented out in this
                     // core build, so the switch could only ever have been decorative.
-                    SettingsToggle { label: "Enable IPv6"; checked: SettingsModel.enableIPv6; onToggled: SettingsModel.enableIPv6 = checked }
+                    SettingsToggle { label: qsTr("Enable IPv6"); checked: SettingsModel.enableIPv6; onToggled: SettingsModel.enableIPv6 = checked }
+                    // Language names are written in their own language, so each is findable
+                    // by someone who cannot read the current one.
+                    SettingsChoice {
+                        label: qsTr("Language")
+                        options: [
+                            { value: "", text: qsTr("Follow System") },
+                            { value: "en", text: "English" },
+                            { value: "zh_CN", text: "简体中文" }
+                        ]
+                        current: SettingsModel.language
+                        onPicked: function (value) { SettingsModel.language = value }
+                    }
                 }
 
                 SettingsSection {
-                    title: "Advanced"
+                    title: qsTr("Advanced")
 
-                    SettingsNavItem { label: "Route Settings"; onOpen: settingsScreen.subPage = 0 }
-                    SettingsNavItem { label: "DNS Settings"; onOpen: settingsScreen.subPage = 1 }
-                    SettingsNavItem { label: "Inbound Settings"; onOpen: settingsScreen.subPage = 2 }
-                    SettingsNavItem { label: "TLS Tricks"; onOpen: settingsScreen.subPage = 3 }
-                    SettingsNavItem { label: "WARP Settings"; onOpen: settingsScreen.subPage = 4 }
+                    SettingsNavItem { label: qsTr("Route Settings"); onOpen: settingsScreen.subPage = 0 }
+                    SettingsNavItem { label: qsTr("DNS Settings"); onOpen: settingsScreen.subPage = 1 }
+                    SettingsNavItem { label: qsTr("Inbound Settings"); onOpen: settingsScreen.subPage = 2 }
+                    SettingsNavItem { label: qsTr("TLS Tricks"); onOpen: settingsScreen.subPage = 3 }
+                    SettingsNavItem { label: qsTr("WARP Settings"); onOpen: settingsScreen.subPage = 4 }
                 }
             }
         }
@@ -145,6 +157,79 @@ Item {
 
                     Behavior on x { NumberAnimation { duration: 150 } }
                 }
+            }
+        }
+    }
+
+    component SettingsChoice: RowLayout {
+        id: choice
+        property string label: ""
+        property var options: []
+        property string current: ""
+
+        signal picked(string value)
+
+        Layout.fillWidth: true
+        Layout.leftMargin: 24
+        Layout.rightMargin: 24
+        height: 44
+
+        Text {
+            Layout.fillWidth: true
+            text: choice.label
+            font.pixelSize: 14
+            color: "#D1D5DB"
+        }
+
+        ComboBox {
+            id: combo
+            Layout.preferredWidth: 180
+            model: choice.options
+            textRole: "text"
+            currentIndex: {
+                for (let i = 0; i < choice.options.length; ++i)
+                    if (choice.options[i].value === choice.current)
+                        return i
+                return 0
+            }
+            onActivated: function (index) { choice.picked(choice.options[index].value) }
+
+            contentItem: Text {
+                leftPadding: 12
+                text: combo.displayText
+                font.pixelSize: 13
+                color: "#E9D5FF"
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+            background: Rectangle {
+                implicitHeight: 32
+                radius: 8
+                color: "#1A1640"
+                border.width: 1
+                border.color: combo.activeFocus ? "#7C3AED" : "#2E2A5A"
+            }
+            // The Basic style's list is white on white-grey; keep it in the app's palette.
+            delegate: ItemDelegate {
+                required property var modelData
+                required property int index
+                width: combo.width
+                highlighted: combo.highlightedIndex === index
+                contentItem: Text {
+                    text: modelData.text
+                    font.pixelSize: 13
+                    color: index === combo.currentIndex ? "#C4B5FD" : "#E5E7EB"
+                    verticalAlignment: Text.AlignVCenter
+                }
+                background: Rectangle {
+                    color: parent.highlighted ? "#2E2A5A" : "#12102B"
+                }
+            }
+            popup.background: Rectangle {
+                radius: 8
+                color: "#12102B"
+                border.width: 1
+                border.color: "#2E2A5A"
             }
         }
     }

@@ -240,7 +240,7 @@ void ConnectionModel::connectFree()
         [this, attempt](const QString &error) {
             if (m_status != Connecting || attempt != m_attempt)
                 return;
-            onVpnError(QStringLiteral("Could not fetch the free nodes: %1").arg(error));
+            onVpnError(tr("Could not fetch the free nodes: %1").arg(error));
         });
 }
 
@@ -319,7 +319,7 @@ void ConnectionModel::onVpnError(const QString &error)
     const bool retrying = dropped && scheduleReconnect(error);
     emit connectionFailed(error);
     if (!retrying)
-        setSessionNotice(QStringLiteral("Could not connect: %1").arg(error), true);
+        setSessionNotice(tr("Could not connect: %1").arg(error), true);
 }
 
 bool ConnectionModel::scheduleReconnect(const QString &error)
@@ -332,7 +332,7 @@ bool ConnectionModel::scheduleReconnect(const QString &error)
     const QList<int> &delays = reconnectDelaysSeconds();
     if (m_reconnectAttempt >= delays.size()) {
         stopReconnecting();
-        setSessionNotice(QStringLiteral("Connection lost, and %1 attempts to reconnect failed: %2")
+        setSessionNotice(tr("Connection lost, and %1 attempts to reconnect failed: %2")
                              .arg(delays.size())
                              .arg(error),
                          true);
@@ -347,7 +347,7 @@ bool ConnectionModel::scheduleReconnect(const QString &error)
                            .arg(seconds)
                            .arg(m_reconnectAttempt)
                            .arg(delays.size()));
-    setSessionNotice(QStringLiteral("Connection lost: %1. Reconnecting in %2 s (attempt %3 of %4)…")
+    setSessionNotice(tr("Connection lost: %1. Reconnecting in %2 s (attempt %3 of %4)…")
                          .arg(error)
                          .arg(seconds)
                          .arg(m_reconnectAttempt)
@@ -364,7 +364,7 @@ void ConnectionModel::onReconnectTimer()
         // Does not use up an attempt: onReachabilityChanged() resumes when it is back.
         m_waitingForNetwork = true;
         onVpnStatusMessage(QStringLiteral("Waiting for the network to reconnect"));
-        setSessionNotice(QStringLiteral("Connection lost: %1. Waiting for the network…")
+        setSessionNotice(tr("Connection lost: %1. Waiting for the network…")
                              .arg(m_lastDropError),
                          true);
         return;

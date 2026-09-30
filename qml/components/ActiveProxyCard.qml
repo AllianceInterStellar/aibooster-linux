@@ -57,7 +57,7 @@ Rectangle {
             Text {
                 id: delayText
                 anchors.centerIn: parent
-                text: card.delay < 0 ? "—" : card.delay + " ms"
+                text: card.delay < 0 ? "—" : qsTr("%1 ms").arg(card.delay)
                 font.pixelSize: 11
                 font.weight: Font.Medium
                 color: {

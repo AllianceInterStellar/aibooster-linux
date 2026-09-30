@@ -63,7 +63,7 @@ Rectangle {
                     Text {
                         id: activeLabel
                         anchors.centerIn: parent
-                        text: "Active"
+                        text: qsTr("Active")
                         font.pixelSize: 10
                         color: "#4ADE80"
                     }
@@ -75,7 +75,7 @@ Rectangle {
                 visible: tile.remainingDays >= 0
 
                 Text {
-                    text: tile.remainingDays + " days left"
+                    text: qsTr("%n day(s) left", "", tile.remainingDays)
                     font.pixelSize: 11
                     color: "#9CA3AF"
                 }

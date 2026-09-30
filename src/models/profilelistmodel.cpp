@@ -399,7 +399,7 @@ void ProfileListModel::updateProfile(const QString &id)
         return;
     const ProfileData target = m_profiles[row];
     if (target.url.isEmpty()) {
-        emit profileError(QStringLiteral("\"%1\" has no subscription URL to update").arg(target.name));
+        emit profileError(tr("\"%1\" has no subscription URL to update").arg(target.name));
         return;
     }
     downloadProfile(target.url, target.name);
@@ -473,7 +473,7 @@ void ProfileListModel::addProfile(const QString &urlOrContent, const QString &ov
 {
     const QString trimmed = urlOrContent.trimmed();
     if (trimmed.isEmpty()) {
-        emit profileError(QStringLiteral("Nothing to add — the input is empty"));
+        emit profileError(tr("Nothing to add — the input is empty"));
         return;
     }
 
@@ -482,7 +482,7 @@ void ProfileListModel::addProfile(const QString &urlOrContent, const QString &ov
     bool malformedDeepLink = false;
     const QString deepLinkUrl = subscriptionUrlFromDeepLink(trimmed, &linkName, &malformedDeepLink);
     if (malformedDeepLink) {
-        emit profileError(QStringLiteral("Deep link carries no subscription URL"));
+        emit profileError(tr("Deep link carries no subscription URL"));
         return;
     }
     if (!deepLinkUrl.isEmpty()) {
@@ -493,7 +493,7 @@ void ProfileListModel::addProfile(const QString &urlOrContent, const QString &ov
     const QString firstLine = trimmed.split(QLatin1Char('\n')).value(0).trimmed();
     const QString unsupported = SubscriptionParser::unsupportedScheme(firstLine);
     if (!unsupported.isEmpty() && SubscriptionParser::shareLinks(trimmed).isEmpty()) {
-        emit profileError(QStringLiteral("%1:// links are not supported by the VPN engine")
+        emit profileError(tr("%1:// links are not supported by the VPN engine")
                               .arg(unsupported));
         return;
     }
@@ -522,7 +522,7 @@ void ProfileListModel::downloadProfile(const QString &url, const QString &overri
 {
     const QUrl parsed(url);
     if (!parsed.isValid() || parsed.host().isEmpty()) {
-        emit profileError(QStringLiteral("Invalid subscription URL: %1").arg(url));
+        emit profileError(tr("Invalid subscription URL: %1").arg(url));
         return;
     }
     if (m_inFlight.contains(url))
@@ -553,7 +553,7 @@ void ProfileListModel::handleDownloadFinished(QNetworkReply *reply, const QStrin
 
     if (reply->error() != QNetworkReply::NoError) {
         // In a VPN app the usual cause is a connected-but-broken tunnel blackholing the download.
-        emit profileError(QStringLiteral("Can't reach the subscription server (%1). "
+        emit profileError(tr("Can't reach the subscription server (%1). "
                                          "If a VPN is connected, disconnect it and try again.")
                               .arg(reply->errorString()));
         return;
@@ -561,13 +561,13 @@ void ProfileListModel::handleDownloadFinished(QNetworkReply *reply, const QStrin
 
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (status != 0 && (status < 200 || status > 299)) {
-        emit profileError(QStringLiteral("Server returned %1").arg(status));
+        emit profileError(tr("Server returned %1").arg(status));
         return;
     }
 
     const QString content = QString::fromUtf8(reply->readAll());
     if (content.trimmed().isEmpty()) {
-        emit profileError(QStringLiteral("Subscription returned an empty response"));
+        emit profileError(tr("Subscription returned an empty response"));
         return;
     }
 
@@ -652,7 +652,7 @@ void ProfileListModel::addRawContent(const QString &rawInput, const QString &ove
 {
     const QString decoded = SubscriptionParser::decodeBody(rawInput);
     if (decoded.trimmed().isEmpty()) {
-        emit profileError(QStringLiteral("No valid profile content found"));
+        emit profileError(tr("No valid profile content found"));
         return;
     }
 
@@ -660,7 +660,7 @@ void ProfileListModel::addRawContent(const QString &rawInput, const QString &ove
         QJsonParseError parseError{};
         QJsonDocument::fromJson(decoded.toUtf8(), &parseError);
         if (parseError.error != QJsonParseError::NoError) {
-            emit profileError(QStringLiteral("Invalid config JSON: %1").arg(parseError.errorString()));
+            emit profileError(tr("Invalid config JSON: %1").arg(parseError.errorString()));
             return;
         }
         QString name = overrideName.trimmed();
@@ -685,7 +685,7 @@ void ProfileListModel::addRawContent(const QString &rawInput, const QString &ove
         return;
     }
 
-    emit profileError(QStringLiteral("No valid profile content found — enter an HTTP(S) "
+    emit profileError(tr("No valid profile content found — enter an HTTP(S) "
                                      "subscription URL or a config link"));
 }
 

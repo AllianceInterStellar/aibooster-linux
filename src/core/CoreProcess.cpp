@@ -54,7 +54,7 @@ CoreProcess::CoreProcess(QObject *parent)
     connect(&m_process, &QProcess::finished, this, &CoreProcess::handleFinished);
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
-            m_lastError = QStringLiteral("The VPN engine could not be started: %1")
+            m_lastError = tr("The VPN engine could not be started: %1")
                               .arg(m_process.errorString());
             setState(Failed);
             emit failed(m_lastError);
@@ -137,19 +137,19 @@ void CoreProcess::start(const QString &configPath, const QString &settingsPath,
                         quint16 proxyPort)
 {
     if (m_state == Starting || m_state == Running) {
-        m_lastError = QStringLiteral("The VPN engine is already running");
+        m_lastError = tr("The VPN engine is already running");
         emit failed(m_lastError);
         return;
     }
     if (m_state == Stopping || m_process.state() != QProcess::NotRunning) {
-        m_lastError = QStringLiteral("The previous VPN engine is still shutting down");
+        m_lastError = tr("The previous VPN engine is still shutting down");
         emit failed(m_lastError);
         return;
     }
 
     const QString binary = locateBinary();
     if (binary.isEmpty()) {
-        m_lastError = QStringLiteral(
+        m_lastError = tr(
                           "The VPN engine binary (aibooster-core) was not found.\n\n"
                           "This client is the user interface only; the engine ships separately.\n"
                           "Looked in:\n  %1")
@@ -247,7 +247,7 @@ void CoreProcess::pollReadiness()
     if (++m_readyAttempts >= kReadyMaxAttempts) {
         m_readyTimer.stop();
         clearProbes();
-        m_lastError = QStringLiteral(
+        m_lastError = tr(
                           "The VPN engine started but never opened its proxy port (%1), so "
                           "no traffic could go through it. Last output:\n%2")
                           .arg(m_proxyPort)
@@ -319,8 +319,8 @@ void CoreProcess::handleFinished(int exitCode, QProcess::ExitStatus status)
         return;
 
     m_lastError = status == QProcess::CrashExit
-        ? QStringLiteral("The VPN engine crashed. Last output:\n%1").arg(m_stderrTail.trimmed())
-        : QStringLiteral("The VPN engine exited unexpectedly (code %1). Last output:\n%2")
+        ? tr("The VPN engine crashed. Last output:\n%1").arg(m_stderrTail.trimmed())
+        : tr("The VPN engine exited unexpectedly (code %1). Last output:\n%2")
               .arg(exitCode)
               .arg(m_stderrTail.trimmed());
 

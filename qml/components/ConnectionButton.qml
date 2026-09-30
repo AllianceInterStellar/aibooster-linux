@@ -67,10 +67,10 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: {
                     switch (connBtn.status) {
-                        case 0: return "Tap to Connect"
-                        case 1: return "Connecting..."
-                        case 2: return "Connected"
-                        case 3: return "Disconnecting..."
+                        case 0: return qsTr("Tap to Connect")
+                        case 1: return qsTr("Tap to Cancel")
+                        case 2: return qsTr("Connected")
+                        case 3: return qsTr("Disconnecting...")
                     }
                 }
                 font.pixelSize: 10

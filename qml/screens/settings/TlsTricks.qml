@@ -57,7 +57,7 @@ Item {
             }
 
             Text {
-                text: "TLS Tricks"
+                text: qsTr("TLS Tricks")
                 font.pixelSize: 20
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -83,7 +83,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: "Enable TLS Fragment"
+                        text: qsTr("Enable TLS Fragment")
                         font.pixelSize: 14
                         color: "#D1D5DB"
                     }
@@ -120,7 +120,7 @@ Item {
                     // takes a min-max pair and picks inside it per packet. A plain Slider could
                     // neither show the stored pair nor write one back.
                     Text {
-                        text: "Fragment Size: " + SettingsModel.tlsFragmentSize + " bytes"
+                        text: qsTr("Fragment Size: %1 bytes").arg(SettingsModel.tlsFragmentSize)
                         font.pixelSize: 13
                         color: "#A78BFA"
                     }
@@ -144,7 +144,7 @@ Item {
                     }
 
                     Text {
-                        text: "Fragment Sleep: " + SettingsModel.tlsFragmentSleep + " ms"
+                        text: qsTr("Fragment Sleep: %1 ms").arg(SettingsModel.tlsFragmentSleep)
                         font.pixelSize: 13
                         color: "#A78BFA"
                     }
@@ -174,7 +174,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: "Enable Mux"
+                        text: qsTr("Enable Mux")
                         font.pixelSize: 14
                         color: "#D1D5DB"
                     }
@@ -208,13 +208,13 @@ Item {
                     opacity: SettingsModel.enableMux ? 1.0 : 0.4
 
                     Text {
-                        text: "Mux Protocol: " + SettingsModel.muxProtocol
+                        text: qsTr("Mux Protocol: %1").arg(SettingsModel.muxProtocol)
                         font.pixelSize: 13
                         color: "#A78BFA"
                     }
 
                     Text {
-                        text: "Max Connections: " + SettingsModel.muxMaxConnections
+                        text: qsTr("Max Connections: %1").arg(SettingsModel.muxMaxConnections)
                         font.pixelSize: 13
                         color: "#A78BFA"
                     }

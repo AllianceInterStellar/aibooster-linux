@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <QApplication>
 #include <QIcon>
+#include <QLibraryInfo>
+#include <QLocale>
+#include <QTranslator>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -62,6 +65,22 @@ void installSignalHandling(QCoreApplication *app)
     ::sigaction(SIGHUP, &action, nullptr);
 }
 
+/// Installs the translations for `code` ("" = the system's language), replacing any that
+/// were installed before. English is the source language, so for it nothing is loaded.
+void applyLanguage(const QString &code, QTranslator *app, QTranslator *qt)
+{
+    QCoreApplication::removeTranslator(app);
+    QCoreApplication::removeTranslator(qt);
+    const QLocale locale = code.isEmpty() ? QLocale::system() : QLocale(code);
+    // Compiled in by qt_add_translations; see CMakeLists.txt.
+    if (app->load(locale, QStringLiteral("aibooster"), QStringLiteral("_"), QStringLiteral(":/i18n")))
+        QCoreApplication::installTranslator(app);
+    // Qt's own strings (standard context menus, dialogs), when the system has them.
+    if (qt->load(locale, QStringLiteral("qtbase"), QStringLiteral("_"),
+                 QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+        QCoreApplication::installTranslator(qt);
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -102,7 +121,22 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "LogsModel", logs);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "SettingsModel", settings);
 
+    // Before anything is loaded, so the first frame is already in the right language. Then
+    // live: the setting takes effect without a restart.
+    QTranslator appTranslator;
+    QTranslator qtTranslator;
+    QString appliedLanguage = settings->language();
+    applyLanguage(appliedLanguage, &appTranslator, &qtTranslator);
+
     auto *tray = new TrayIcon(conn, &engine, &engine);
+    QObject::connect(settings, &SettingsModel::changed, &engine, [&]() {
+        if (settings->language() == appliedLanguage)
+            return;
+        appliedLanguage = settings->language();
+        applyLanguage(appliedLanguage, &appTranslator, &qtTranslator);
+        engine.retranslate();
+        tray->retranslate();
+    });
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "Tray", tray);
     // With a tray, closing the window can mean "keep running"; Main.qml decides, and quits
     // explicitly when it does not. Without one, closing the window quits as it always did.
