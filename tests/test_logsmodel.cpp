@@ -31,9 +31,9 @@ private:
 void TestLogsModel::engineLinesAppearWithTheirLevel()
 {
     LogsModel model;
-    model.appendEngineLine(QStringLiteral("INFO[0000] inbound/mixed[mixed-in]: tcp server started"));
-    model.appendEngineLine(QStringLiteral("ERROR outbound/vless[x]: dial tcp: i/o timeout"));
-    model.appendEngineLine(QStringLiteral("Starting engine: /usr/libexec/aibooster/aibooster-core run"));
+    model.appendLine(QStringLiteral("INFO[0000] inbound/mixed[mixed-in]: tcp server started"));
+    model.appendLine(QStringLiteral("ERROR outbound/vless[x]: dial tcp: i/o timeout"));
+    model.appendLine(QStringLiteral("Starting engine: /usr/libexec/aibooster/aibooster-core run"));
 
     QCOMPARE(model.rowCount(), 3);
     QCOMPARE(level(model, 0), int(LogsModel::Info));
@@ -48,10 +48,10 @@ void TestLogsModel::engineLinesAppearWithTheirLevel()
 void TestLogsModel::pausingHoldsLinesUntilResumed()
 {
     LogsModel model;
-    model.appendEngineLine(QStringLiteral("INFO one"));
+    model.appendLine(QStringLiteral("INFO one"));
     model.setIsPaused(true);
-    model.appendEngineLine(QStringLiteral("INFO two"));
-    model.appendEngineLine(QStringLiteral("INFO three"));
+    model.appendLine(QStringLiteral("INFO two"));
+    model.appendLine(QStringLiteral("INFO three"));
     QCOMPARE(model.rowCount(), 1);
 
     model.setIsPaused(false);
@@ -63,7 +63,7 @@ void TestLogsModel::theListIsCapped()
 {
     LogsModel model;
     for (int i = 0; i < 1200; ++i)
-        model.appendEngineLine(QStringLiteral("INFO line %1").arg(i));
+        model.appendLine(QStringLiteral("INFO line %1").arg(i));
     QCOMPARE(model.rowCount(), 500);
     QCOMPARE(message(model, 499), QStringLiteral("line 1199"));
 }
@@ -71,7 +71,7 @@ void TestLogsModel::theListIsCapped()
 void TestLogsModel::blankLinesAreDropped()
 {
     LogsModel model;
-    model.appendEngineLine(QStringLiteral("   "));
+    model.appendLine(QStringLiteral("   "));
     QCOMPARE(model.rowCount(), 0);
 }
 

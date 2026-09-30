@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
     auto *profiles = new ProfileListModel(&engine);
     auto *logs = new LogsModel(&engine);
     auto *settings = new SettingsModel(&engine);
-    QObject::connect(conn, &ConnectionModel::engineLogLine, logs, &LogsModel::appendEngineLine);
+    QObject::connect(conn, &ConnectionModel::logLine, logs, &LogsModel::appendLine);
 
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ConnectionModel", conn);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ProxyListModel", proxies);

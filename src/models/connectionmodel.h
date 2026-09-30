@@ -4,6 +4,7 @@
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QQmlEngine>
+#include <QStringList>
 #include <QTimer>
 
 class ClashApi;
@@ -76,8 +77,8 @@ signals:
     /// The connect attempt failed. statusLog alone is not enough — nothing binds it, so a
     /// failed connect used to leave the button snapping back with no explanation at all.
     void connectionFailed(const QString &error);
-    /// One line of the engine's own output, for the Logs page.
-    void engineLogLine(const QString &line);
+    /// A line for the Logs page: the engine's own output, and this model's progress and errors.
+    void logLine(const QString &line);
 
 private:
     /// Picks the config source: the active user profile, otherwise the free nodes.
@@ -89,6 +90,7 @@ private:
     void onVpnDisconnected();
     void onVpnError(const QString &error);
     void onVpnStatusMessage(const QString &message);
+    void appendStatusLog(const QString &line);
     void setSessionNotice(const QString &message, bool isError);
 
     /// Auto Connect: dial out once at launch when the setting is on.
@@ -130,7 +132,7 @@ private:
     QString m_activeProxyName;
     QString m_activeProxyType;
     QString m_activeProxyCountry;
-    QString m_statusLog;
+    QStringList m_statusLog;
     QString m_sessionNotice;
     bool m_sessionNoticeIsError = false;
 

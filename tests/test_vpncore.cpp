@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // VpnCore turns a config into a running engine. These tests run it against a stub engine:
-// what is accepted as a config, what is written to disk and with which permissions, and
-// that an attempt still starting can be abandoned.
+// that unusable configs never reach it, what is written to disk and with which
+// permissions, and that an attempt still starting can be abandoned.
 
 #include "../src/models/vpncore.h"
 
@@ -42,9 +42,7 @@ class TestVpnCore : public QObject
 private slots:
     void initTestCase();
     void cleanupTestCase();
-    void acceptsEveryShareLinkSchemeTheImporterAccepts_data();
-    void acceptsEveryShareLinkSchemeTheImporterAccepts();
-    void rejectsTheFreeProfileIndex();
+    void refusesAConfigTheEngineCannotUse();
     void anAttemptStillStartingCanBeAbandoned();
     void configFilesAreOwnerOnlyAndTheCacheSurvives();
 
@@ -67,29 +65,16 @@ void TestVpnCore::cleanupTestCase()
     QDir(VpnCore::engineDir()).removeRecursively();
 }
 
-void TestVpnCore::acceptsEveryShareLinkSchemeTheImporterAccepts_data()
+void TestVpnCore::refusesAConfigTheEngineCannotUse()
 {
-    QTest::addColumn<QByteArray>("link");
-    // hy:// and hy2:// were accepted on import and then refused at connect time.
-    for (const char *scheme : {"vmess", "vless", "ss", "ssr", "trojan", "hysteria", "hysteria2",
-                               "hy", "hy2", "tuic", "wg", "ssh"}) {
-        QTest::newRow(scheme) << QByteArray(scheme) + "://user@example.com:443#node";
-    }
-}
-
-void TestVpnCore::acceptsEveryShareLinkSchemeTheImporterAccepts()
-{
-    QFETCH(QByteArray, link);
-    QVERIFY(VpnCore::isUsableConfig(link));
-    // Subscriptions usually arrive as one base64 blob.
-    QVERIFY(VpnCore::isUsableConfig(link.toBase64()));
-}
-
-void TestVpnCore::rejectsTheFreeProfileIndex()
-{
-    QVERIFY(!VpnCore::isUsableConfig("{\"data\":{\"profiles\":[{\"sublink\":\"https://x\"}]}}"));
-    QVERIFY(!VpnCore::isUsableConfig("   "));
-    QVERIFY(VpnCore::isUsableConfig("{\"outbounds\":[{\"type\":\"direct\"}]}"));
+    // What counts as usable is SubscriptionParser's call (see its tests); this checks the
+    // connect path asks it, and never starts an engine for the free-node index.
+    VpnCore core;
+    QSignalSpy errors(&core, &VpnCore::errorOccurred);
+    core.connectVpnWithConfig(
+        QStringLiteral("{\"data\":{\"profiles\":[{\"sublink\":\"https://x\"}]}}"));
+    QCOMPARE(errors.count(), 1);
+    QCOMPARE(core.coreStatus(), VpnCore::Error);
 }
 
 void TestVpnCore::anAttemptStillStartingCanBeAbandoned()
@@ -101,15 +86,25 @@ void TestVpnCore::anAttemptStillStartingCanBeAbandoned()
     core.connectVpnWithConfig(QStringLiteral("vless://user@example.com:443#node"));
     QCOMPARE(core.coreStatus(), VpnCore::Starting);
 
-    core.disconnectVpn();
+    // Asynchronous: the UI thread is not held while the engine exits.
+    QVERIFY(core.disconnectVpn());
+    QCOMPARE(core.coreStatus(), VpnCore::Stopping);
+    // Until it has gone, a new attempt is refused rather than racing the old engine.
+    core.connectVpnWithConfig(QStringLiteral("vless://user@example.com:443#node"));
+    QCOMPARE(errors.count(), 1);
+
+    QVERIFY(disconnected.wait(10000));
     QCOMPARE(core.coreStatus(), VpnCore::Idle);
     QCOMPARE(disconnected.count(), 1);
-    QCOMPARE(errors.count(), 0);
 
-    // And a new attempt is accepted straight away.
+    // And then a new attempt is accepted.
     core.connectVpnWithConfig(QStringLiteral("vless://user@example.com:443#node"));
     QCOMPARE(core.coreStatus(), VpnCore::Starting);
-    core.disconnectVpn();
+    QVERIFY(core.disconnectVpn());
+    QVERIFY(disconnected.wait(10000));
+
+    // Nothing to stop: says so, and no signal follows.
+    QVERIFY(!core.disconnectVpn());
 }
 
 void TestVpnCore::configFilesAreOwnerOnlyAndTheCacheSurvives()
@@ -132,7 +127,9 @@ void TestVpnCore::configFilesAreOwnerOnlyAndTheCacheSurvives()
     QCOMPARE(QFile::permissions(VpnCore::engineDir()) & kGroupOrOther, QFileDevice::Permissions());
     QVERIFY2(QFile::exists(cached), "starting the engine wiped its cache");
 
-    core.disconnectVpn();
+    QSignalSpy disconnected(&core, &VpnCore::disconnected);
+    QVERIFY(core.disconnectVpn());
+    QVERIFY(disconnected.wait(10000));
 }
 
 QTEST_MAIN(TestVpnCore)

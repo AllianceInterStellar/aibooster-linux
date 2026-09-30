@@ -33,7 +33,7 @@ LogsModel::LogsModel(QObject *parent)
     m_filterModel->setSourceModel(this);
 }
 
-void LogsModel::appendEngineLine(const QString &line)
+void LogsModel::appendLine(const QString &line)
 {
     // Paused means "stop scrolling so I can read", not "lose what happens meanwhile". Hold
     // the lines back and deliver them on resume, capped like the list itself.

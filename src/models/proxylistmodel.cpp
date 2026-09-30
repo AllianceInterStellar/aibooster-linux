@@ -4,6 +4,7 @@
 #include "connectionmodel.h"
 #include "profilelistmodel.h"
 #include "../services/ClashApi.h"
+#include "../services/SubscriptionParser.h"
 
 #include <QDir>
 #include <QElapsedTimer>
@@ -27,67 +28,6 @@ constexpr int kProbeTimeoutMs = 3000;
 /// Cap the in-flight sockets: a big subscription can hold hundreds of nodes and opening one
 /// socket per node at once exhausts the process file-descriptor limit.
 constexpr int kMaxConcurrentProbes = 32;
-
-QStringList protocolPrefixes()
-{
-    return {QStringLiteral("vmess://"),     QStringLiteral("vless://"),  QStringLiteral("ss://"),
-            QStringLiteral("ssr://"),       QStringLiteral("trojan://"), QStringLiteral("hysteria://"),
-            QStringLiteral("hysteria2://"), QStringLiteral("hy://"),     QStringLiteral("hy2://"),
-            QStringLiteral("tuic://"),      QStringLiteral("wg://"),     QStringLiteral("ssh://")};
-}
-
-bool isProtocolLink(const QString &line)
-{
-    const QStringList prefixes = protocolPrefixes();
-    for (const QString &prefix : prefixes) {
-        if (line.startsWith(prefix, Qt::CaseInsensitive))
-            return true;
-    }
-    return false;
-}
-
-QString tryBase64Decode(const QString &input)
-{
-    static const QRegularExpression whitespace(QStringLiteral("\\s+"));
-    QString compact = input;
-    compact.remove(whitespace);
-    if (compact.isEmpty())
-        return {};
-    compact.replace(QLatin1Char('-'), QLatin1Char('+'));
-    compact.replace(QLatin1Char('_'), QLatin1Char('/'));
-    while (compact.size() % 4 != 0)
-        compact.append(QLatin1Char('='));
-
-    const auto result = QByteArray::fromBase64Encoding(
-        compact.toLatin1(), QByteArray::Base64Encoding | QByteArray::AbortOnBase64DecodingErrors);
-    if (!result)
-        return {};
-    const QByteArray &decoded = result.decoded;
-    if (decoded.isEmpty() || decoded.contains('\0'))
-        return {};
-    return QString::fromUtf8(decoded);
-}
-
-/// Subscription bodies arrive either as JSON, as a plain link list, or as one long base64 line.
-QString decodeSubscriptionBody(const QString &content)
-{
-    const QString trimmed = content.trimmed();
-    if (trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('{')))
-        return trimmed;
-
-    const QStringList lines = trimmed.split(QLatin1Char('\n'));
-    for (const QString &line : lines) {
-        if (isProtocolLink(line.trimmed()))
-            return trimmed;
-    }
-
-    const QString decoded = tryBase64Decode(trimmed);
-    if (decoded.isEmpty())
-        return trimmed;
-    if (decoded.contains(QStringLiteral("://")) || decoded.trimmed().startsWith(QLatin1Char('{')))
-        return decoded;
-    return trimmed;
-}
 
 QString displayProxyType(const QString &type)
 {
@@ -295,7 +235,7 @@ void finishNode(ProxyNode &node, int index)
 
 bool parseVmessNode(const QString &line, int index, ProxyNode *out)
 {
-    const QString json = tryBase64Decode(line.mid(line.indexOf(QStringLiteral("://")) + 3).trimmed());
+    const QString json = SubscriptionParser::decodeBase64(line.mid(line.indexOf(QStringLiteral("://")) + 3).trimmed());
     if (json.isEmpty())
         return false;
     const QJsonObject obj = QJsonDocument::fromJson(json.toUtf8()).object();
@@ -329,7 +269,7 @@ bool parseShadowsocksNode(const QString &line, int index, ProxyNode *out)
     // Either `ss://base64(method:pass@host:port)` or `ss://base64(method:pass)@host:port`.
     QString authority = rest;
     if (!authority.contains(QLatin1Char('@'))) {
-        const QString decoded = tryBase64Decode(authority);
+        const QString decoded = SubscriptionParser::decodeBase64(authority);
         if (!decoded.isEmpty())
             authority = decoded;
     }
@@ -372,26 +312,16 @@ bool parseProxyLine(const QString &line, int index, ProxyNode *out)
         return false;
     const QString scheme = line.left(idx).toLower();
 
-    if (scheme == QLatin1String("vmess"))
+    // Only what the engine can actually connect to is listed; see SubscriptionParser.
+    if (!SubscriptionParser::isShareLink(line))
+        return false;
+    // svmess:// and xvmess:// carry the same base64 JSON payload as vmess://.
+    if (scheme.endsWith(QLatin1String("vmess")))
         return parseVmessNode(line, index, out);
     if (scheme == QLatin1String("ss"))
         return parseShadowsocksNode(line, index, out);
 
-    static const QHash<QString, QString> generic = {
-        {QStringLiteral("vless"), QStringLiteral("VLESS")},
-        {QStringLiteral("trojan"), QStringLiteral("Trojan")},
-        {QStringLiteral("ssr"), QStringLiteral("ShadowsocksR")},
-        {QStringLiteral("hysteria"), QStringLiteral("Hysteria")},
-        {QStringLiteral("hy"), QStringLiteral("Hysteria")},
-        {QStringLiteral("hysteria2"), QStringLiteral("Hysteria2")},
-        {QStringLiteral("hy2"), QStringLiteral("Hysteria2")},
-        {QStringLiteral("tuic"), QStringLiteral("TUIC")},
-        {QStringLiteral("anytls"), QStringLiteral("AnyTLS")},
-        {QStringLiteral("wg"), QStringLiteral("WireGuard")},
-        {QStringLiteral("ssh"), QStringLiteral("SSH")}};
-    const QString type = generic.value(scheme);
-    if (type.isEmpty())
-        return false;
+    const QString type = SubscriptionParser::protocolName(line);
     return parseGenericNode(line, index, type, out);
 }
 
@@ -469,7 +399,7 @@ QVector<ProxyNode> parseProxyNodes(const QString &content)
     if (trimmed.startsWith(QLatin1Char('{')))
         return parseEngineJson(trimmed);
 
-    const QString decoded = decodeSubscriptionBody(trimmed);
+    const QString decoded = SubscriptionParser::decodeBody(trimmed);
     if (decoded.trimmed().startsWith(QLatin1Char('{')))
         return parseEngineJson(decoded.trimmed());
 

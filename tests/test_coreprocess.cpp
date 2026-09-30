@@ -7,6 +7,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QSignalSpy>
 #include <QTcpServer>
@@ -47,6 +48,7 @@ private slots:
     void readyWhenTheEngineBindsOnlyIPv6Loopback();
     void controlApiPortIsTakenFromWhatTheEngineAnnounces();
     void stopTerminatesTheEngine();
+    void stopDoesNotWaitForAnEngineThatIgnoresSigterm();
     void engineExitingEarlyIsReportedAsFailure();
 
 private:
@@ -241,7 +243,9 @@ void TestCoreProcess::stopTerminatesTheEngine()
     core.start(m_configPath, m_settingsPath, kTestProxyPort + 1);
     QVERIFY(ready.wait(15000));
 
+    QSignalSpy stopped(&core, &CoreProcess::stopped);
     core.stop();
+    QVERIFY(stopped.wait(10000));
     QCOMPARE(core.state(), CoreProcess::Stopped);
 
     // The port must be free afterwards; an orphaned engine would hold it and the next
@@ -249,6 +253,41 @@ void TestCoreProcess::stopTerminatesTheEngine()
     QTcpServer rebind;
     QVERIFY2(rebind.listen(QHostAddress::LocalHost, kTestProxyPort + 1),
              "the stub engine outlived stop() and is still holding the proxy port");
+    qunsetenv("AIBOOSTER_CORE");
+}
+
+void TestCoreProcess::stopDoesNotWaitForAnEngineThatIgnoresSigterm()
+{
+    // stop() used to wait up to seven seconds for the engine on the UI thread, freezing the
+    // whole window on every disconnect from a slow engine. It must return at once, and the
+    // engine must still be gone — killed — once the grace period is up.
+    const quint16 port = kTestProxyPort + 3;
+    const QString stub = writeScript(
+        QDir(m_dir.path()), QStringLiteral("stubborn-core"),
+        QStringLiteral("#!/bin/sh\n"
+                       "exec python3 -c \"import signal,socket,time;"
+                       "signal.signal(signal.SIGTERM, signal.SIG_IGN);"
+                       "s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
+                       "s.bind(('127.0.0.1',%1));s.listen(5);time.sleep(120)\"\n")
+            .arg(port));
+    qputenv("AIBOOSTER_CORE", stub.toUtf8());
+
+    CoreProcess core;
+    QSignalSpy ready(&core, &CoreProcess::ready);
+    QSignalSpy stopped(&core, &CoreProcess::stopped);
+    core.start(m_configPath, m_settingsPath, port);
+    QVERIFY(ready.wait(15000));
+
+    QElapsedTimer clock;
+    clock.start();
+    core.stop();
+    QVERIFY2(clock.elapsed() < 500, "stop() blocked the caller");
+    QCOMPARE(core.state(), CoreProcess::Stopping);
+
+    QVERIFY(stopped.wait(CoreProcess::kStopGraceMs + 5000));
+    QCOMPARE(core.state(), CoreProcess::Stopped);
+    QTcpServer rebind;
+    QVERIFY2(rebind.listen(QHostAddress::LocalHost, port), "the engine survived SIGKILL");
     qunsetenv("AIBOOSTER_CORE");
 }
 

@@ -14,6 +14,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTest>
+#include <QThread>
 
 namespace {
 
@@ -60,6 +61,8 @@ private slots:
     void recoveryIsANoOpWithNoStateFile();
     void stateFileIsOwnerOnly();
     void applyKeepsTheOriginalsAnUnfinishedRestoreLeftBehind();
+    void asyncCallsRunInOrderAndReportBackOnTheCallersThread();
+    void asyncCompletionIsDroppedForADestroyedContext();
 };
 
 void TestSystemProxy::initTestCase()
@@ -181,6 +184,48 @@ void TestSystemProxy::applyKeepsTheOriginalsAnUnfinishedRestoreLeftBehind()
 
     QCOMPARE(proxyMode(), modeBefore);
     QVERIFY(!QFile::exists(statePath()));
+}
+
+void TestSystemProxy::asyncCallsRunInOrderAndReportBackOnTheCallersThread()
+{
+    // A cancel right after the engine came up queues a revert behind the apply. If the two
+    // could reorder, the revert would find nothing to undo and the apply would then leave
+    // the desktop redirected at an engine that is gone.
+    const QString modeBefore = proxyMode();
+    SystemProxy &proxy = SystemProxy::instance();
+    QStringList order;
+    bool applyOk = false;
+    QThread *applyThread = nullptr;
+
+    proxy.applyAsync(QStringLiteral("127.0.0.1"), 2334, this,
+                     [&](bool ok, const QString &) {
+                         applyOk = ok;
+                         applyThread = QThread::currentThread();
+                         order << QStringLiteral("apply");
+                     });
+    proxy.revertAsync(this, [&]() { order << QStringLiteral("revert"); });
+
+    QTRY_COMPARE_WITH_TIMEOUT(order.size(), 2, 20000);
+    QCOMPARE(order, (QStringList{QStringLiteral("apply"), QStringLiteral("revert")}));
+    QVERIFY(applyOk);
+    QCOMPARE(applyThread, QThread::currentThread());
+    QVERIFY(!proxy.isApplied());
+    QCOMPARE(proxyMode(), modeBefore);
+    QVERIFY(!QFile::exists(statePath()));
+}
+
+void TestSystemProxy::asyncCompletionIsDroppedForADestroyedContext()
+{
+    SystemProxy &proxy = SystemProxy::instance();
+    bool called = false;
+    auto *context = new QObject;
+    proxy.applyAsync(QStringLiteral("127.0.0.1"), 2334, context,
+                     [&](bool, const QString &) { called = true; });
+    delete context;
+    proxy.waitForPending();
+    QTest::qWait(100);   // let any queued completion be delivered
+    QVERIFY(!called);
+    proxy.revert();
 }
 
 QTEST_MAIN(TestSystemProxy)

@@ -57,6 +57,8 @@ qt_add_executable(aibooster
     src/models/vpncore.cpp
     src/services/ClashApi.cpp
     src/services/FreeProfiles.cpp
+    src/services/SubscriptionParser.cpp
+    src/services/SubscriptionParser.h
 )
 
 qt_add_qml_module(aibooster
@@ -140,6 +142,7 @@ if(AIBOOSTER_BUILD_TESTS)
         src/models/profilelistmodel.cpp
         src/models/profilelistmodel.h
         src/core/PrivateFiles.cpp
+        src/services/SubscriptionParser.cpp
     )
     target_link_libraries(test_deeplinks PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
     add_test(NAME deeplinks COMMAND test_deeplinks)
@@ -193,9 +196,17 @@ if(AIBOOSTER_BUILD_TESTS)
         src/core/PrivateFiles.cpp
         src/platform/SystemProxy.cpp
         src/services/ClashApi.cpp
+        src/services/SubscriptionParser.cpp
     )
     target_link_libraries(test_vpncore PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
     add_test(NAME vpncore COMMAND test_vpncore)
+
+    qt_add_executable(test_subscriptionparser
+        tests/test_subscriptionparser.cpp
+        src/services/SubscriptionParser.cpp
+    )
+    target_link_libraries(test_subscriptionparser PRIVATE Qt6::Test)
+    add_test(NAME subscriptionparser COMMAND test_subscriptionparser)
 endif()
 
 # ── Install (XDG layout) ─────────────────────────────────────────────────────────────

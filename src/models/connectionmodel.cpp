@@ -62,7 +62,7 @@ ConnectionModel::ConnectionModel(QObject *parent)
     connect(m_vpnCore, &VpnCore::disconnected, this, &ConnectionModel::onVpnDisconnected);
     connect(m_vpnCore, &VpnCore::errorOccurred, this, &ConnectionModel::onVpnError);
     connect(m_vpnCore, &VpnCore::statusMessage, this, &ConnectionModel::onVpnStatusMessage);
-    connect(m_vpnCore, &VpnCore::engineLogLine, this, &ConnectionModel::engineLogLine);
+    connect(m_vpnCore, &VpnCore::engineLogLine, this, &ConnectionModel::logLine);
 
     m_statsTimer.setInterval(kStatsIntervalMs);
     connect(&m_statsTimer, &QTimer::timeout, this, &ConnectionModel::pollStats);
@@ -90,7 +90,7 @@ QString ConnectionModel::ipAddress() const { return m_ipAddress; }
 QString ConnectionModel::activeProxyName() const { return m_activeProxyName; }
 QString ConnectionModel::activeProxyType() const { return m_activeProxyType; }
 QString ConnectionModel::activeProxyCountry() const { return m_activeProxyCountry; }
-QString ConnectionModel::statusLog() const { return m_statusLog; }
+QString ConnectionModel::statusLog() const { return m_statusLog.join(QLatin1Char('\n')); }
 QString ConnectionModel::sessionNotice() const { return m_sessionNotice; }
 bool ConnectionModel::sessionNoticeIsError() const { return m_sessionNoticeIsError; }
 
@@ -136,10 +136,10 @@ void ConnectionModel::cancelConnect()
     m_reconnectAfterDisconnect = false;
     onVpnStatusMessage(QStringLiteral("Connection cancelled"));
     setStatus(Disconnecting);
-    // Emits disconnected() when the engine was starting; a no-op while the free nodes are
-    // still being fetched, in which case nothing else will move us on.
-    m_vpnCore->disconnectVpn();
-    if (m_status == Disconnecting)
+    // While the engine is starting this stops it, and onVpnDisconnected() finishes the job
+    // once it has gone. While the free nodes are still being fetched there is no engine,
+    // and nothing else will move us on.
+    if (!m_vpnCore->disconnectVpn())
         setStatus(Disconnected);
 }
 
@@ -256,10 +256,23 @@ void ConnectionModel::onVpnDisconnected()
     }
 }
 
+void ConnectionModel::appendStatusLog(const QString &line)
+{
+    // Bounded: this used to grow for as long as the app ran, one line per engine message.
+    constexpr int kMaxStatusLines = 200;
+    m_statusLog.append(line);
+    if (m_statusLog.size() > kMaxStatusLines)
+        m_statusLog.erase(m_statusLog.begin(), m_statusLog.end() - kMaxStatusLines);
+    emit statusLogChanged();
+    // The Logs page shows these next to the engine's own lines, so "Connecting…" and the
+    // reason a connect failed are where the user looks for them.
+    emit logLine(line);
+}
+
 void ConnectionModel::onVpnError(const QString &error)
 {
-    m_statusLog += "ERROR: " + error + "\n";
-    emit statusLogChanged();
+    // "ERROR " so the Logs page files it under Error.
+    appendStatusLog(QStringLiteral("ERROR ") + error);
     m_reconnectAfterDisconnect = false;
     stopStatsPolling();
     setStatus(Disconnected);
@@ -346,7 +359,8 @@ void ConnectionModel::lookupIpAddress(int endpointIndex)
     // Go through the core's own mixed inbound: the desktop app is not inside the tunnel unless
     // TUN or the system proxy happens to be on, and asking directly would report the machine's
     // real IP as if it were the exit node's. Re-read the port every time — it is user-editable.
-    const int mixedPort = SettingsModel::instance() ? SettingsModel::instance()->mixedPort() : 2334;
+    const int mixedPort = SettingsModel::instance() ? SettingsModel::instance()->mixedPort()
+                                                    : SettingsModel::kDefaultMixedPort;
     m_ipLookup->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, QStringLiteral("127.0.0.1"),
                                        static_cast<quint16>(mixedPort)));
 
@@ -371,6 +385,5 @@ void ConnectionModel::lookupIpAddress(int endpointIndex)
 
 void ConnectionModel::onVpnStatusMessage(const QString &message)
 {
-    m_statusLog += message + "\n";
-    emit statusLogChanged();
+    appendStatusLog(message);
 }

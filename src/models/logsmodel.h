@@ -41,11 +41,11 @@ public:
     Q_INVOKABLE void clearLogs();
     Q_INVOKABLE void togglePause();
 
-    /// Adds one line of the engine's output. The engine logs to stdout, which CoreProcess
-    /// captures; there is no log file to read. (An earlier version tailed data/box.log, but
+    /// Adds one line: the engine's output, or the client's own progress and errors. The
+    /// engine logs to stdout, which CoreProcess captures; there is no log file to read. (An earlier version tailed data/box.log, but
     /// the engine only writes a file when its settings name one, and ours never did — so
     /// the Logs page stayed empty.)
-    void appendEngineLine(const QString &line);
+    void appendLine(const QString &line);
 
 signals:
     void isPausedChanged();

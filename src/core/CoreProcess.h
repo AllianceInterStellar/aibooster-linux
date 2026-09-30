@@ -2,10 +2,13 @@
 #ifndef AIBOOSTER_COREPROCESS_H
 #define AIBOOSTER_COREPROCESS_H
 
+#include <QList>
 #include <QObject>
 #include <QProcess>
 #include <QStringList>
 #include <QTimer>
+
+class QTcpSocket;
 
 /// Supervises the VPN engine as a **separate process**.
 ///
@@ -71,12 +74,18 @@ public:
     /// means never reporting a connection that is in fact working.
     void start(const QString &configPath, const QString &settingsPath, quint16 proxyPort);
 
-    /// Asks the engine to exit (SIGTERM), escalating to SIGKILL if it ignores that.
+    /// Asks the engine to exit (SIGTERM), escalating to SIGKILL if it ignores that for
+    /// kStopGraceMs. Returns at once; stopped() follows when the process has gone — straight
+    /// away if there was none. Never blocks the UI thread.
     void stop();
+
+    /// How long the engine gets to exit on SIGTERM before it is killed.
+    static constexpr int kStopGraceMs = 5000;
 
 signals:
     void ready();
-    void stoppedCleanly();
+    /// The engine has exited because stop() asked it to (or there was none to stop).
+    void stopped();
     void failed(const QString &error);
     void logLine(const QString &line);
 
@@ -88,11 +97,15 @@ signals:
 private:
     void setState(State state);
     void pollReadiness();
+    void clearProbes();
     void drainOutput();
     void handleFinished(int exitCode, QProcess::ExitStatus status);
 
     QProcess m_process;
     QTimer m_readyTimer;
+    QTimer m_killTimer;
+    /// This tick's connection attempts to the proxy port, one per loopback family.
+    QList<QTcpSocket *> m_probes;
     QString m_lastError;
     QString m_stderrTail;
     State m_state = Stopped;

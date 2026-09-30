@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPointer>
 #include <QProcess>
 #include <QStandardPaths>
 
@@ -91,6 +92,64 @@ SystemProxy::SystemProxy(QObject *parent)
     : QObject(parent)
     , m_backend(detectBackend())
 {
+    m_worker.setMaxThreadCount(1);
+}
+
+QString SystemProxy::lastError() const
+{
+    QMutexLocker lock(&m_errorMutex);
+    return m_lastError;
+}
+
+void SystemProxy::setLastError(const QString &error)
+{
+    QMutexLocker lock(&m_errorMutex);
+    m_lastError = error;
+}
+
+void SystemProxy::waitForPending()
+{
+    m_worker.waitForDone();
+}
+
+bool SystemProxy::apply(const QString &host, quint16 port)
+{
+    waitForPending();
+    return doApply(host, port);
+}
+
+void SystemProxy::revert()
+{
+    waitForPending();
+    doRevert();
+}
+
+void SystemProxy::applyAsync(const QString &host, quint16 port, QObject *context,
+                             std::function<void(bool, const QString &)> done)
+{
+    QPointer<QObject> guard(context);
+    m_worker.start([this, host, port, guard, done]() {
+        const bool ok = doApply(host, port);
+        const QString error = ok ? QString() : lastError();
+        // Posted to this object, which lives on the UI thread for the whole run, and the
+        // guard checked there: testing it here would race with `context` being destroyed.
+        QMetaObject::invokeMethod(this, [guard, done, ok, error]() {
+            if (guard && done)
+                done(ok, error);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void SystemProxy::revertAsync(QObject *context, std::function<void()> done)
+{
+    QPointer<QObject> guard(context);
+    m_worker.start([this, guard, done]() {
+        doRevert();
+        QMetaObject::invokeMethod(this, [guard, done]() {
+            if (guard && done)
+                done();
+        }, Qt::QueuedConnection);
+    });
 }
 
 SystemProxy &SystemProxy::instance()
@@ -309,14 +368,14 @@ bool SystemProxy::restoreKde(const QJsonObject &saved)
     return ok;
 }
 
-bool SystemProxy::apply(const QString &host, quint16 port)
+bool SystemProxy::doApply(const QString &host, quint16 port)
 {
     if (m_backend == None) {
-        m_lastError = QStringLiteral(
+        setLastError(QStringLiteral(
             "This desktop has no proxy settings this client knows how to drive, so the "
             "system proxy was left alone. Point your browser at %1:%2 manually.")
                           .arg(host)
-                          .arg(port);
+                          .arg(port));
         return false;
     }
 
@@ -339,15 +398,15 @@ bool SystemProxy::apply(const QString &host, quint16 port)
                               : m_backend == GSettings ? captureGSettings()
                                                        : captureKde();
     if (!reusePending && !writeState(saved)) {
-        m_lastError = QStringLiteral("Could not save the current proxy settings to %1; "
-                                     "refusing to change them.")
-                          .arg(statePath());
+        setLastError(QStringLiteral("Could not save the current proxy settings to %1; "
+                                    "refusing to change them.")
+                         .arg(statePath()));
         return false;
     }
 
     const bool ok = m_backend == GSettings ? applyGSettings(host, port) : applyKde(host, port);
     if (!ok) {
-        m_lastError = QStringLiteral("Failed to set the system proxy via %1.").arg(backendName());
+        setLastError(QStringLiteral("Failed to set the system proxy via %1.").arg(backendName()));
         // Undo whatever partially landed. The state file goes only once that worked: it is the
         // one record of the settings to go back to.
         const bool restored =
@@ -358,12 +417,12 @@ bool SystemProxy::apply(const QString &host, quint16 port)
     }
 
     m_applied = true;
-    m_lastError.clear();
+    setLastError(QString());
     emit appliedChanged(true);
     return true;
 }
 
-void SystemProxy::revert()
+void SystemProxy::doRevert()
 {
     // Nothing of ours is live. Any state file left on disk belongs to a restore that has not
     // gone through yet, and deleting it would throw away the only way back.
@@ -381,10 +440,11 @@ void SystemProxy::revert()
         clearState();
     } else {
         // Keep the file: the next launch's recoverFromPreviousRun() retries from it.
-        m_lastError = QStringLiteral("Could not restore the system proxy via %1; it will be "
-                                     "retried the next time the app starts.")
-                          .arg(backendName());
-        qWarning("%s", qPrintable(m_lastError));
+        const QString error = QStringLiteral("Could not restore the system proxy via %1; it "
+                                             "will be retried the next time the app starts.")
+                                  .arg(backendName());
+        setLastError(error);
+        qWarning("%s", qPrintable(error));
     }
     m_applied = false;
     emit appliedChanged(false);
