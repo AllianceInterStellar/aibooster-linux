@@ -17,7 +17,7 @@ include(GNUInstallDirs)
 
 # 6.2, not 6.4: Ubuntu 22.04 LTS ships Qt 6.2 and is supported until 2027. Verified
 # building and running there — see README.
-find_package(Qt6 6.2 REQUIRED COMPONENTS Quick QuickControls2 Network)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Quick QuickControls2 Network Widgets)
 # qt_standard_project_setup() only exists from Qt 6.3.
 if(COMMAND qt_standard_project_setup)
     qt_standard_project_setup()
@@ -45,8 +45,12 @@ qt_add_executable(aibooster
     src/main.cpp
     src/core/CoreProcess.cpp
     src/core/CoreProcess.h
+    src/core/PrivateFiles.cpp
+    src/core/PrivateFiles.h
     src/platform/SystemProxy.cpp
     src/platform/SystemProxy.h
+    src/platform/TrayIcon.cpp
+    src/platform/TrayIcon.h
     src/models/connectionmodel.cpp
     src/models/logsmodel.cpp
     src/models/profilelistmodel.cpp
@@ -55,6 +59,8 @@ qt_add_executable(aibooster
     src/models/vpncore.cpp
     src/services/ClashApi.cpp
     src/services/FreeProfiles.cpp
+    src/services/SubscriptionParser.cpp
+    src/services/SubscriptionParser.h
 )
 
 qt_add_qml_module(aibooster
@@ -90,7 +96,32 @@ qt_add_qml_module(aibooster
         qml/icons/about.svg
         qml/icons/shield.svg
         qml/icons/shield-check.svg
+        qml/icons/tray-off.svg
+        qml/icons/tray-connecting.svg
+        qml/icons/tray-on.svg
 )
+
+# ── Translations ─────────────────────────────────────────────────────────────────────
+# English is the source language. Each i18n/aibooster_<lang>.ts is compiled to a .qm and
+# embedded under :/i18n, where main.cpp's applyLanguage() looks. Linguist is optional: a
+# build without it is English-only rather than failing.
+#
+# After changing user-visible strings, refresh the .ts files (then translate the new
+# entries, e.g. in Qt Linguist):
+#   lupdate -locations none -no-obsolete -source-language en src qml \
+#       -ts i18n/aibooster_zh_CN.ts
+option(AIBOOSTER_REQUIRE_TRANSLATIONS
+       "Fail instead of building English-only when Linguist is missing (release builds)" OFF)
+find_package(Qt6 QUIET COMPONENTS LinguistTools)
+if(Qt6LinguistTools_FOUND)
+    qt_add_translations(aibooster TS_FILES i18n/aibooster_zh_CN.ts)
+elseif(AIBOOSTER_REQUIRE_TRANSLATIONS)
+    message(FATAL_ERROR "Qt6 LinguistTools not found, and AIBOOSTER_REQUIRE_TRANSLATIONS is on. "
+                        "Install qt6-tools-dev and qt6-l10n-tools.")
+else()
+    message(WARNING "Qt6 LinguistTools not found: building without translations (English "
+                    "only). Install qt6-tools-dev and qt6-l10n-tools to include them.")
+endif()
 
 target_compile_definitions(aibooster PRIVATE
     AIBOOSTER_VERSION="${PROJECT_VERSION}"
@@ -102,6 +133,7 @@ target_link_libraries(aibooster PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Network
+    Qt6::Widgets
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────────
@@ -137,6 +169,8 @@ if(AIBOOSTER_BUILD_TESTS)
         tests/test_deeplinks.cpp
         src/models/profilelistmodel.cpp
         src/models/profilelistmodel.h
+        src/core/PrivateFiles.cpp
+        src/services/SubscriptionParser.cpp
     )
     target_link_libraries(test_deeplinks PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
     add_test(NAME deeplinks COMMAND test_deeplinks)
@@ -145,6 +179,7 @@ if(AIBOOSTER_BUILD_TESTS)
         tests/test_systemproxy.cpp
         src/platform/SystemProxy.cpp
         src/platform/SystemProxy.h
+        src/core/PrivateFiles.cpp
     )
     target_link_libraries(test_systemproxy PRIVATE Qt6::Test)
     add_test(NAME systemproxy COMMAND test_systemproxy)
@@ -162,6 +197,66 @@ if(AIBOOSTER_BUILD_TESTS)
     )
     target_link_libraries(test_freeprofiles PRIVATE Qt6::Test Qt6::Network)
     add_test(NAME freeprofiles COMMAND test_freeprofiles)
+
+    qt_add_executable(test_privatefiles
+        tests/test_privatefiles.cpp
+        src/core/PrivateFiles.cpp
+    )
+    target_link_libraries(test_privatefiles PRIVATE Qt6::Test)
+    add_test(NAME privatefiles COMMAND test_privatefiles)
+
+    qt_add_executable(test_logsmodel
+        tests/test_logsmodel.cpp
+        src/models/logsmodel.cpp
+        src/models/logsmodel.h
+    )
+    target_link_libraries(test_logsmodel PRIVATE Qt6::Test Qt6::Quick)
+    add_test(NAME logsmodel COMMAND test_logsmodel)
+
+    # Against a stub engine; links the pieces VpnCore drives (engine supervision, the
+    # desktop proxy, the control API client) but never the real engine.
+    qt_add_executable(test_vpncore
+        tests/test_vpncore.cpp
+        src/models/vpncore.cpp
+        src/models/vpncore.h
+        src/models/settingsmodel.cpp
+        src/core/CoreProcess.cpp
+        src/core/PrivateFiles.cpp
+        src/platform/SystemProxy.cpp
+        src/services/ClashApi.cpp
+        src/services/SubscriptionParser.cpp
+    )
+    target_link_libraries(test_vpncore PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
+    add_test(NAME vpncore COMMAND test_vpncore)
+
+    # The whole connection pipeline minus the UI, against a stub engine.
+    qt_add_executable(test_connectionmodel
+        tests/test_connectionmodel.cpp
+        src/models/connectionmodel.cpp
+        src/models/profilelistmodel.cpp
+        src/models/proxylistmodel.cpp
+        src/models/settingsmodel.cpp
+        src/models/vpncore.cpp
+        src/core/CoreProcess.cpp
+        src/core/PrivateFiles.cpp
+        src/platform/SystemProxy.cpp
+        src/services/ClashApi.cpp
+        src/services/FreeProfiles.cpp
+        src/services/SubscriptionParser.cpp
+    )
+    target_compile_definitions(test_connectionmodel PRIVATE
+        AIBOOSTER_FREE_URL="${AIBOOSTER_FREE_URL}"
+        AIBOOSTER_FREE_BACKUP_URL="${AIBOOSTER_FREE_BACKUP_URL}"
+    )
+    target_link_libraries(test_connectionmodel PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
+    add_test(NAME connectionmodel COMMAND test_connectionmodel)
+
+    qt_add_executable(test_subscriptionparser
+        tests/test_subscriptionparser.cpp
+        src/services/SubscriptionParser.cpp
+    )
+    target_link_libraries(test_subscriptionparser PRIVATE Qt6::Test)
+    add_test(NAME subscriptionparser COMMAND test_subscriptionparser)
 endif()
 
 # ── Install (XDG layout) ─────────────────────────────────────────────────────────────

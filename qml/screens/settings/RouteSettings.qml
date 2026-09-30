@@ -14,20 +14,20 @@ Item {
     // Every entry maps onto a key the engine actually reads,
     // so what is picked here changes the config the core builds on the next connect.
     readonly property var regions: [
-        { id: "other", label: "Other", desc: "No country-specific direct rules" },
-        { id: "ir", label: "Iran", desc: "Keep Iranian sites direct" },
-        { id: "cn", label: "China", desc: "Keep Chinese sites direct" },
-        { id: "ru", label: "Russia", desc: "Keep Russian sites direct" },
-        { id: "af", label: "Afghanistan", desc: "Keep Afghan sites direct" },
-        { id: "id", label: "Indonesia", desc: "Keep Indonesian sites direct" },
-        { id: "tr", label: "Turkey", desc: "Keep Turkish sites direct" },
-        { id: "br", label: "Brazil", desc: "Keep Brazilian sites direct" }
+        { id: "other", label: qsTr("Other"), desc: qsTr("No country-specific direct rules") },
+        { id: "ir", label: qsTr("Iran"), desc: qsTr("Keep Iranian sites direct") },
+        { id: "cn", label: qsTr("China"), desc: qsTr("Keep Chinese sites direct") },
+        { id: "ru", label: qsTr("Russia"), desc: qsTr("Keep Russian sites direct") },
+        { id: "af", label: qsTr("Afghanistan"), desc: qsTr("Keep Afghan sites direct") },
+        { id: "id", label: qsTr("Indonesia"), desc: qsTr("Keep Indonesian sites direct") },
+        { id: "tr", label: qsTr("Turkey"), desc: qsTr("Keep Turkish sites direct") },
+        { id: "br", label: qsTr("Brazil"), desc: qsTr("Keep Brazilian sites direct") }
     ]
 
     readonly property var balancers: [
-        { id: "round-robin", label: "Round Robin" },
-        { id: "consistent-hashing", label: "Consistent Hashing" },
-        { id: "sticky-sessions", label: "Sticky Sessions" }
+        { id: "round-robin", label: qsTr("Round Robin") },
+        { id: "consistent-hashing", label: qsTr("Consistent Hashing") },
+        { id: "sticky-sessions", label: qsTr("Sticky Sessions") }
     ]
 
     ColumnLayout {
@@ -61,7 +61,7 @@ Item {
             }
 
             Text {
-                text: "Route Settings"
+                text: qsTr("Route Settings")
                 font.pixelSize: 20
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -95,29 +95,29 @@ Item {
                         spacing: 12
 
                         Text {
-                            text: "Routing"
+                            text: qsTr("Routing")
                             font.pixelSize: 14
                             font.weight: Font.Bold
                             color: "#A78BFA"
                         }
 
                         RouteToggle {
-                            label: "Bypass LAN"
-                            description: "Send private and local-network addresses direct"
+                            label: qsTr("Bypass LAN")
+                            description: qsTr("Send private and local-network addresses direct")
                             checked: SettingsModel.bypassLan
                             onToggled: function (v) { SettingsModel.bypassLan = v }
                         }
 
                         RouteToggle {
-                            label: "Block Ads"
-                            description: "Drop known ad and malware domains"
+                            label: qsTr("Block Ads")
+                            description: qsTr("Drop known ad and malware domains")
                             checked: SettingsModel.blockAds
                             onToggled: function (v) { SettingsModel.blockAds = v }
                         }
 
                         RouteToggle {
-                            label: "Resolve Destination"
-                            description: "Resolve domains locally before routing them"
+                            label: qsTr("Resolve Destination")
+                            description: qsTr("Resolve domains locally before routing them")
                             checked: SettingsModel.resolveDestination
                             onToggled: function (v) { SettingsModel.resolveDestination = v }
                         }
@@ -141,7 +141,7 @@ Item {
                         spacing: 8
 
                         Text {
-                            text: "Region"
+                            text: qsTr("Region")
                             font.pixelSize: 14
                             font.weight: Font.Bold
                             color: "#A78BFA"
@@ -178,7 +178,7 @@ Item {
                         spacing: 8
 
                         Text {
-                            text: "Balancer Strategy"
+                            text: qsTr("Balancer Strategy")
                             font.pixelSize: 14
                             font.weight: Font.Bold
                             color: "#A78BFA"
@@ -199,8 +199,8 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Routing changes are written into the core's configuration, so they "
-                          + "take effect the next time you connect."
+                    text: qsTr("Routing changes are written into the core's configuration, so they "
+                          + "take effect the next time you connect.")
                     font.pixelSize: 11
                     color: "#6B7280"
                     wrapMode: Text.WordWrap

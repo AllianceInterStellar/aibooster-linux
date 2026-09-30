@@ -1,5 +1,8 @@
 #include "profilelistmodel.h"
 
+#include "../core/PrivateFiles.h"
+#include "../services/SubscriptionParser.h"
+
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -10,7 +13,6 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
-#include <QSaveFile>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QUrl>
@@ -25,71 +27,6 @@ namespace {
 const char *const kUserAgent = "AiBooster/2.0";
 constexpr int kDownloadTimeoutMs = 15000;
 constexpr double kBytesPerGB = 1024.0 * 1024.0 * 1024.0;
-
-QStringList directConfigPrefixes()
-{
-    return {QStringLiteral("vmess://"),     QStringLiteral("vless://"), QStringLiteral("ss://"),
-            QStringLiteral("ssr://"),       QStringLiteral("trojan://"), QStringLiteral("hysteria://"),
-            QStringLiteral("hysteria2://"), QStringLiteral("hy://"),     QStringLiteral("hy2://"),
-            QStringLiteral("tuic://"),      QStringLiteral("wg://"),     QStringLiteral("ssh://")};
-}
-
-bool isProtocolLink(const QString &line)
-{
-    const QStringList prefixes = directConfigPrefixes();
-    for (const QString &prefix : prefixes) {
-        if (line.startsWith(prefix, Qt::CaseInsensitive))
-            return true;
-    }
-    return false;
-}
-
-/// Strict base64 decode that also accepts the URL-safe alphabet and missing padding.
-/// Returns an empty string when the input is not valid base64 text.
-QString tryBase64Decode(const QString &input)
-{
-    static const QRegularExpression whitespace(QStringLiteral("\\s+"));
-    QString compact = input;
-    compact.remove(whitespace);
-    if (compact.size() < 8)
-        return {};
-    compact.replace(QLatin1Char('-'), QLatin1Char('+'));
-    compact.replace(QLatin1Char('_'), QLatin1Char('/'));
-    while (compact.size() % 4 != 0)
-        compact.append(QLatin1Char('='));
-
-    const auto result = QByteArray::fromBase64Encoding(
-        compact.toLatin1(), QByteArray::Base64Encoding | QByteArray::AbortOnBase64DecodingErrors);
-    if (!result)
-        return {};
-    const QByteArray &decoded = result.decoded;
-    if (decoded.isEmpty() || decoded.contains('\0'))
-        return {};
-    return QString::fromUtf8(decoded);
-}
-
-/// Subscriptions are usually served as one long base64 line; JSON configs and plain link lists
-/// are passed through untouched.
-QString decodeSubscriptionBody(const QString &content)
-{
-    const QString trimmed = content.trimmed();
-    if (trimmed.isEmpty() || trimmed.startsWith(QLatin1Char('{')) || trimmed.startsWith(QLatin1Char('[')))
-        return trimmed;
-
-    const QStringList lines = trimmed.split(QLatin1Char('\n'));
-    for (const QString &line : lines) {
-        if (isProtocolLink(line.trimmed()))
-            return trimmed;
-    }
-
-    const QString decoded = tryBase64Decode(trimmed);
-    if (decoded.isEmpty())
-        return trimmed;
-    if (decoded.contains(QStringLiteral("://")) || decoded.contains(QLatin1Char('{'))
-        || decoded.contains(QLatin1Char('#')) || decoded.contains(QStringLiteral("[Interface]")))
-        return decoded;
-    return trimmed;
-}
 
 /// `profile-title` may be sent verbatim or as `base64:<payload>`.
 QString decodeProfileTitle(const QString &headerValue)
@@ -113,7 +50,7 @@ QString decodeProfileTitle(const QString &headerValue)
 QHash<QString, QString> parseContentHeaders(const QString &content)
 {
     QHash<QString, QString> headers;
-    const QStringList lines = decodeSubscriptionBody(content).split(QLatin1Char('\n'));
+    const QStringList lines = SubscriptionParser::decodeBody(content).split(QLatin1Char('\n'));
     const int limit = qMin(lines.size(), 10);
     for (int i = 0; i < limit; ++i) {
         QString line = lines.at(i).trimmed();
@@ -177,30 +114,12 @@ QString parseUrlFilename(const QString &url)
 
 QString detectProtocolFromLine(const QString &line)
 {
-    const int idx = line.indexOf(QStringLiteral("://"));
-    if (idx <= 0)
-        return {};
-    const QString scheme = line.left(idx).toLower();
-    static const QHash<QString, QString> names = {
-        {QStringLiteral("vmess"), QStringLiteral("VMess")},
-        {QStringLiteral("vless"), QStringLiteral("VLESS")},
-        {QStringLiteral("ss"), QStringLiteral("Shadowsocks")},
-        {QStringLiteral("ssconf"), QStringLiteral("Shadowsocks")},
-        {QStringLiteral("ssr"), QStringLiteral("ShadowsocksR")},
-        {QStringLiteral("trojan"), QStringLiteral("Trojan")},
-        {QStringLiteral("hysteria"), QStringLiteral("Hysteria")},
-        {QStringLiteral("hy"), QStringLiteral("Hysteria")},
-        {QStringLiteral("hysteria2"), QStringLiteral("Hysteria2")},
-        {QStringLiteral("hy2"), QStringLiteral("Hysteria2")},
-        {QStringLiteral("tuic"), QStringLiteral("TUIC")},
-        {QStringLiteral("wg"), QStringLiteral("WireGuard")},
-        {QStringLiteral("ssh"), QStringLiteral("SSH")}};
-    return names.value(scheme);
+    return SubscriptionParser::protocolName(line);
 }
 
 QString detectProtocolFromContent(const QString &content)
 {
-    const QString decoded = decodeSubscriptionBody(content);
+    const QString decoded = SubscriptionParser::decodeBody(content);
     const QStringList lines = decoded.split(QLatin1Char('\n'));
     for (const QString &line : lines) {
         const QString protocol = detectProtocolFromLine(line.trimmed());
@@ -217,7 +136,7 @@ QString detectProtocolFromContent(const QString &content)
 QString parseVmessName(const QString &vmessUrl)
 {
     const QString payload = vmessUrl.mid(vmessUrl.indexOf(QStringLiteral("://")) + 3).trimmed();
-    const QString json = tryBase64Decode(payload);
+    const QString json = SubscriptionParser::decodeBase64(payload);
     if (json.isEmpty())
         return {};
     const QJsonObject obj = QJsonDocument::fromJson(json.toUtf8()).object();
@@ -480,7 +399,7 @@ void ProfileListModel::updateProfile(const QString &id)
         return;
     const ProfileData target = m_profiles[row];
     if (target.url.isEmpty()) {
-        emit profileError(QStringLiteral("\"%1\" has no subscription URL to update").arg(target.name));
+        emit profileError(tr("\"%1\" has no subscription URL to update").arg(target.name));
         return;
     }
     downloadProfile(target.url, target.name);
@@ -513,8 +432,10 @@ QString ProfileListModel::subscriptionUrlFromDeepLink(const QString &input, QStr
     const QString trimmed = input.trimmed();
 
     // A direct protocol link (vless://, ss://, …) is a config, never a deep link — check
-    // first so one can never be mistaken for the other.
-    if (isProtocolLink(trimmed))
+    // first so one can never be mistaken for the other. That includes formats the engine
+    // cannot use: those get their own error from addProfile, not "malformed deep link".
+    if (SubscriptionParser::isShareLink(trimmed)
+        || !SubscriptionParser::unsupportedScheme(trimmed).isEmpty())
         return {};
 
     // Plain subscription URLs are downloaded as they are.
@@ -552,7 +473,7 @@ void ProfileListModel::addProfile(const QString &urlOrContent, const QString &ov
 {
     const QString trimmed = urlOrContent.trimmed();
     if (trimmed.isEmpty()) {
-        emit profileError(QStringLiteral("Nothing to add — the input is empty"));
+        emit profileError(tr("Nothing to add — the input is empty"));
         return;
     }
 
@@ -561,7 +482,7 @@ void ProfileListModel::addProfile(const QString &urlOrContent, const QString &ov
     bool malformedDeepLink = false;
     const QString deepLinkUrl = subscriptionUrlFromDeepLink(trimmed, &linkName, &malformedDeepLink);
     if (malformedDeepLink) {
-        emit profileError(QStringLiteral("Deep link carries no subscription URL"));
+        emit profileError(tr("Deep link carries no subscription URL"));
         return;
     }
     if (!deepLinkUrl.isEmpty()) {
@@ -570,7 +491,13 @@ void ProfileListModel::addProfile(const QString &urlOrContent, const QString &ov
     }
 
     const QString firstLine = trimmed.split(QLatin1Char('\n')).value(0).trimmed();
-    if (isProtocolLink(firstLine)) {
+    const QString unsupported = SubscriptionParser::unsupportedScheme(firstLine);
+    if (!unsupported.isEmpty() && SubscriptionParser::shareLinks(trimmed).isEmpty()) {
+        emit profileError(tr("%1:// links are not supported by the VPN engine")
+                              .arg(unsupported));
+        return;
+    }
+    if (SubscriptionParser::isShareLink(firstLine)) {
         addDirectConfig(trimmed, overrideName);
         return;
     }
@@ -595,7 +522,7 @@ void ProfileListModel::downloadProfile(const QString &url, const QString &overri
 {
     const QUrl parsed(url);
     if (!parsed.isValid() || parsed.host().isEmpty()) {
-        emit profileError(QStringLiteral("Invalid subscription URL: %1").arg(url));
+        emit profileError(tr("Invalid subscription URL: %1").arg(url));
         return;
     }
     if (m_inFlight.contains(url))
@@ -626,7 +553,7 @@ void ProfileListModel::handleDownloadFinished(QNetworkReply *reply, const QStrin
 
     if (reply->error() != QNetworkReply::NoError) {
         // In a VPN app the usual cause is a connected-but-broken tunnel blackholing the download.
-        emit profileError(QStringLiteral("Can't reach the subscription server (%1). "
+        emit profileError(tr("Can't reach the subscription server (%1). "
                                          "If a VPN is connected, disconnect it and try again.")
                               .arg(reply->errorString()));
         return;
@@ -634,13 +561,13 @@ void ProfileListModel::handleDownloadFinished(QNetworkReply *reply, const QStrin
 
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (status != 0 && (status < 200 || status > 299)) {
-        emit profileError(QStringLiteral("Server returned %1").arg(status));
+        emit profileError(tr("Server returned %1").arg(status));
         return;
     }
 
     const QString content = QString::fromUtf8(reply->readAll());
     if (content.trimmed().isEmpty()) {
-        emit profileError(QStringLiteral("Subscription returned an empty response"));
+        emit profileError(tr("Subscription returned an empty response"));
         return;
     }
 
@@ -679,12 +606,12 @@ void ProfileListModel::handleDownloadFinished(QNetworkReply *reply, const QStrin
 
 void ProfileListModel::addDirectConfig(const QString &rawConfig, const QString &overrideName)
 {
-    const QString decoded = decodeSubscriptionBody(rawConfig);
+    const QString decoded = SubscriptionParser::decodeBody(rawConfig);
     QStringList configLines;
     const QStringList lines = decoded.split(QLatin1Char('\n'));
     for (const QString &line : lines) {
         const QString t = line.trimmed();
-        if (isProtocolLink(t))
+        if (SubscriptionParser::isShareLink(t))
             configLines.append(t);
     }
 
@@ -723,9 +650,9 @@ void ProfileListModel::addDirectConfig(const QString &rawConfig, const QString &
 
 void ProfileListModel::addRawContent(const QString &rawInput, const QString &overrideName)
 {
-    const QString decoded = decodeSubscriptionBody(rawInput);
+    const QString decoded = SubscriptionParser::decodeBody(rawInput);
     if (decoded.trimmed().isEmpty()) {
-        emit profileError(QStringLiteral("No valid profile content found"));
+        emit profileError(tr("No valid profile content found"));
         return;
     }
 
@@ -733,7 +660,7 @@ void ProfileListModel::addRawContent(const QString &rawInput, const QString &ove
         QJsonParseError parseError{};
         QJsonDocument::fromJson(decoded.toUtf8(), &parseError);
         if (parseError.error != QJsonParseError::NoError) {
-            emit profileError(QStringLiteral("Invalid config JSON: %1").arg(parseError.errorString()));
+            emit profileError(tr("Invalid config JSON: %1").arg(parseError.errorString()));
             return;
         }
         QString name = overrideName.trimmed();
@@ -743,19 +670,23 @@ void ProfileListModel::addRawContent(const QString &rawInput, const QString &ove
         return;
     }
 
-    int configCount = 0;
-    const QStringList lines = decoded.split(QLatin1Char('\n'));
-    for (const QString &line : lines) {
-        if (isProtocolLink(line.trimmed()))
-            ++configCount;
-    }
-    if (configCount == 0) {
-        emit profileError(QStringLiteral("No valid profile content found — enter an HTTP(S) "
-                                         "subscription URL or a config link"));
+    if (!SubscriptionParser::shareLinks(decoded).isEmpty()) {
+        addDirectConfig(decoded, overrideName);
         return;
     }
 
-    addDirectConfig(decoded, overrideName);
+    // WireGuard [Interface] text and Clash YAML carry no share links, but the engine
+    // converts both.
+    if (SubscriptionParser::isUsableConfig(decoded.toUtf8())) {
+        QString name = overrideName.trimmed();
+        if (name.isEmpty())
+            name = QStringLiteral("Imported Config");
+        storeProfile(QString(), name, decoded, SubscriptionInfo{});
+        return;
+    }
+
+    emit profileError(tr("No valid profile content found — enter an HTTP(S) "
+                                     "subscription URL or a config link"));
 }
 
 void ProfileListModel::storeProfile(const QString &url, const QString &name, const QString &content,
@@ -827,7 +758,9 @@ void ProfileListModel::setLoadingDelta(int delta)
 QString ProfileListModel::storagePath() const
 {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(dir);
+    // Owner-only: profiles hold the user's subscription URLs and node credentials, and this
+    // directory is also the parent of the engine's.
+    PrivateFiles::ensureDir(dir);
     return dir + QStringLiteral("/profiles.json");
 }
 
@@ -893,10 +826,10 @@ void ProfileListModel::save() const
     QJsonObject root;
     root.insert(QStringLiteral("profiles"), array);
 
-    // QSaveFile keeps the on-disk list intact if the write is interrupted.
-    QSaveFile file(storagePath());
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    file.commit();
+    // Atomic, so an interrupted write leaves the previous list intact; owner-only, because
+    // it is full of credentials.
+    QString error;
+    if (!PrivateFiles::write(storagePath(), QJsonDocument(root).toJson(QJsonDocument::Indented),
+                             &error))
+        qWarning("%s", qPrintable(error));
 }

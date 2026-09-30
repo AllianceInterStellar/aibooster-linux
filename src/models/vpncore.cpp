@@ -2,17 +2,16 @@
 #include "vpncore.h"
 
 #include "../core/CoreProcess.h"
+#include "../core/PrivateFiles.h"
 #include "../services/ClashApi.h"
+#include "../services/SubscriptionParser.h"
 #include "../platform/SystemProxy.h"
 #include "settingsmodel.h"
 
 #include <QDir>
 #include <QFile>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QStandardPaths>
 
 namespace {
@@ -20,21 +19,6 @@ namespace {
 /// Written next to the engine's own state so a support request can just tar the directory.
 const char *const kConfigFileName = "config.json";
 const char *const kSettingsFileName = "engine-settings.json";
-
-bool writeFile(const QString &path, const QByteArray &contents, QString *error)
-{
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        *error = QStringLiteral("Could not write %1: %2").arg(path, file.errorString());
-        return false;
-    }
-    if (file.write(contents) != contents.size()) {
-        *error = QStringLiteral("Could not write %1: %2").arg(path, file.errorString());
-        return false;
-    }
-    file.close();
-    return true;
-}
 
 } // namespace
 
@@ -44,23 +28,22 @@ VpnCore::VpnCore(QObject *parent)
 {
     connect(m_core, &CoreProcess::ready, this, &VpnCore::handleEngineReady);
     connect(m_core, &CoreProcess::failed, this, &VpnCore::handleEngineFailure);
-    connect(m_core, &CoreProcess::logLine, this, &VpnCore::statusMessage);
+    connect(m_core, &CoreProcess::logLine, this, &VpnCore::engineLogLine);
     connect(m_core, &CoreProcess::controlApiPortDetected, this, [this](quint16 port) {
         // Follow the engine rather than our own request; see CoreProcess::controlApiPortDetected.
         ClashApi::setPort(port);
         emit statusMessage(QStringLiteral("Engine control API is on port %1").arg(port));
     });
-    connect(m_core, &CoreProcess::stoppedCleanly, this, [this]() {
-        if (m_coreStatus == Running || m_coreStatus == Stopping)
-            emit statusMessage(QStringLiteral("Engine stopped"));
-    });
+    connect(m_core, &CoreProcess::stopped, this, &VpnCore::finishStopping);
 }
 
 VpnCore::~VpnCore()
 {
     // The system proxy is machine-wide state; leaving it pointed at an engine that is about
-    // to die would break every other application on the desktop.
-    teardown();
+    // to die would break every other application on the desktop. Synchronously: the process
+    // is going away, and a queued revert would never run. The engine itself is stopped by
+    // CoreProcess's destructor, after this.
+    SystemProxy::instance().revert();
 }
 
 QString VpnCore::engineDir()
@@ -81,119 +64,49 @@ void VpnCore::fail(const QString &message)
     emit errorOccurred(message);
 }
 
-void VpnCore::connectVpn(const QString &subscriptionUrl)
-{
-    if (m_coreStatus == Running || m_coreStatus == Starting || m_coreStatus == Downloading) {
-        // Returning quietly would leave the caller stuck on "Connecting" for ever.
-        m_lastError = QStringLiteral("A connection attempt is already in progress");
-        emit errorOccurred(m_lastError);
-        return;
-    }
-
-    setCoreStatus(Downloading);
-    emit statusMessage(QStringLiteral("Downloading subscription..."));
-    downloadSubscription(subscriptionUrl);
-}
-
 void VpnCore::connectVpnWithConfig(const QString &configContent)
 {
-    if (m_coreStatus == Running || m_coreStatus == Starting || m_coreStatus == Downloading) {
-        m_lastError = QStringLiteral("A connection attempt is already in progress");
+    if (m_coreStatus == Running || m_coreStatus == Starting || m_coreStatus == Stopping) {
+        // Returning quietly would leave the caller stuck on "Connecting" for ever.
+        m_lastError = m_coreStatus == Stopping
+            ? tr("The previous connection is still shutting down")
+            : tr("A connection attempt is already in progress");
         emit errorOccurred(m_lastError);
         return;
     }
 
     if (configContent.trimmed().isEmpty()) {
-        fail(QStringLiteral("Empty config content"));
+        fail(tr("Empty config content"));
         return;
     }
 
     launchEngine(configContent);
 }
 
-void VpnCore::disconnectVpn()
+bool VpnCore::disconnectVpn()
 {
+    if (m_coreStatus == Stopping)
+        return true;
     if (m_coreStatus != Running && m_coreStatus != Starting)
-        return;
+        return false;
 
     setCoreStatus(Stopping);
     emit statusMessage(QStringLiteral("Stopping VPN..."));
 
-    teardown();
+    // Order matters: put the desktop back BEFORE the engine goes away, so there is never a
+    // window in which the system proxy points at a port with nothing behind it. Both steps
+    // are asynchronous; disconnected() follows once the engine has actually exited.
+    SystemProxy::instance().revertAsync(this, [this]() { m_core->stop(); });
+    return true;
+}
 
+void VpnCore::finishStopping()
+{
+    if (m_coreStatus != Stopping)
+        return;
     setCoreStatus(Idle);
     emit disconnected();
     emit statusMessage(QStringLiteral("VPN stopped"));
-}
-
-void VpnCore::teardown()
-{
-    // Order matters: put the desktop back BEFORE the engine goes away, so there is never a
-    // window in which the system proxy points at a port with nothing behind it.
-    SystemProxy::instance().revert();
-    m_core->stop();
-}
-
-void VpnCore::downloadSubscription(const QString &url)
-{
-    QString cleanUrl = url;
-    const int hashIndex = cleanUrl.indexOf(QLatin1Char('#'));
-    if (hashIndex >= 0)
-        cleanUrl = cleanUrl.left(hashIndex);
-
-    QNetworkRequest request{QUrl{cleanUrl}};
-    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AiBooster/2.0"));
-    request.setTransferTimeout(30000);
-
-    QNetworkReply *reply = m_network.get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-
-        if (reply->error() != QNetworkReply::NoError) {
-            fail(QStringLiteral("Download failed: %1").arg(reply->errorString()));
-            return;
-        }
-
-        const QByteArray data = reply->readAll();
-        if (data.isEmpty()) {
-            fail(QStringLiteral("Empty subscription content"));
-            return;
-        }
-
-        emit statusMessage(QStringLiteral("Subscription downloaded (%1 bytes)").arg(data.size()));
-        launchEngine(QString::fromUtf8(data));
-    });
-}
-
-/// True when the payload is something the engine can actually build a tunnel from:
-/// an engine JSON object carrying a non-empty "outbounds" array, or a subscription body
-/// (share links, or base64 that decodes to them). Deliberately rejects the `?type=free`
-/// profile INDEX, whose {"data":{"profiles":[…]}} shape the engine silently discards.
-bool VpnCore::isUsableConfig(const QByteArray &configData)
-{
-    const QByteArray trimmed = configData.trimmed();
-    if (trimmed.isEmpty())
-        return false;
-
-    const QJsonDocument doc = QJsonDocument::fromJson(trimmed);
-    if (doc.isObject())
-        return !doc.object().value(QStringLiteral("outbounds")).toArray().isEmpty();
-
-    auto hasShareLink = [](const QByteArray &text) {
-        static const char *const kSchemes[] = {"vmess://", "vless://", "ss://", "ssr://",
-                                               "trojan://", "hysteria://", "hysteria2://",
-                                               "tuic://", "wg://", "warp://", "ssh://"};
-        for (const char *scheme : kSchemes)
-            if (text.contains(scheme))
-                return true;
-        return false;
-    };
-
-    if (hasShareLink(trimmed))
-        return true;
-    // Subscriptions are frequently one long base64 blob.
-    const QByteArray decoded = QByteArray::fromBase64(trimmed);
-    return !decoded.isEmpty() && hasShareLink(decoded);
 }
 
 void VpnCore::launchEngine(const QString &configContent)
@@ -207,17 +120,15 @@ void VpnCore::launchEngine(const QString &configContent)
     // engine's failure paths are not always distinguishable from a clean start, and for a
     // VPN client "connected with no tunnel" is the worst possible outcome: the user believes
     // they are protected while their traffic is in the clear.
-    if (!isUsableConfig(config)) {
-        fail(QStringLiteral("The server returned something that is not a usable VPN config"));
+    if (!SubscriptionParser::isUsableConfig(config)) {
+        fail(tr("The server returned something that is not a usable VPN config"));
         return;
     }
 
     const QString workingDir = engineDir();
-    // Start from a clean directory: a stale config from a previous profile that failed to be
-    // overwritten would silently connect the user to the wrong servers.
-    QDir(workingDir).removeRecursively();
-    if (!QDir().mkpath(workingDir)) {
-        fail(QStringLiteral("Could not create the engine directory at %1").arg(workingDir));
+    // Owner-only: the config carries the user's node credentials.
+    if (!PrivateFiles::ensureDir(workingDir)) {
+        fail(tr("Could not create the engine directory at %1").arg(workingDir));
         return;
     }
 
@@ -240,10 +151,19 @@ void VpnCore::launchEngine(const QString &configContent)
     const QString configPath = runningConfigPath();
     const QString settingsPath = workingDir + QLatin1Char('/') + QLatin1String(kSettingsFileName);
 
+    // Remove the previous run's files before writing, rather than the whole directory. A
+    // stale config that failed to be overwritten must never be launched (it would silently
+    // connect the user to the wrong servers), but the rest of the directory is the engine's
+    // own cache — rule sets, geo databases — and wiping it made every connect download them
+    // again.
+    QFile::remove(configPath);
+    QFile::remove(settingsPath);
+
     QString error;
-    if (!writeFile(configPath, config, &error)
-        || !writeFile(settingsPath,
-                      QJsonDocument(engineSettings).toJson(QJsonDocument::Compact), &error)) {
+    if (!PrivateFiles::write(configPath, config, &error)
+        || !PrivateFiles::write(settingsPath,
+                                QJsonDocument(engineSettings).toJson(QJsonDocument::Compact),
+                                &error)) {
         fail(error);
         return;
     }
@@ -256,19 +176,37 @@ void VpnCore::launchEngine(const QString &configContent)
 
 void VpnCore::handleEngineReady()
 {
-    if (m_wantSystemProxy) {
-        SystemProxy &proxy = SystemProxy::instance();
-        if (proxy.apply(QStringLiteral("127.0.0.1"), m_mixedPort)) {
+    // Cancelled while the engine was coming up; the queued stop will finish the job.
+    if (m_coreStatus != Starting)
+        return;
+
+    if (!m_wantSystemProxy) {
+        markConnected();
+        return;
+    }
+
+    SystemProxy &proxy = SystemProxy::instance();
+    proxy.applyAsync(QStringLiteral("127.0.0.1"), m_mixedPort, this,
+                     [this, &proxy](bool ok, const QString &error) {
+        // Cancelled while the settings were being written. The cancel queued a revert
+        // behind this apply, so the desktop is put back regardless.
+        if (m_coreStatus != Starting)
+            return;
+        if (ok) {
             emit statusMessage(QStringLiteral("System proxy set to 127.0.0.1:%1 via %2")
                                    .arg(m_mixedPort)
                                    .arg(proxy.backendName()));
         } else {
             // Not fatal: the tunnel is up and usable by anything pointed at the local port.
             // Reporting it as an error would hide a working connection behind a red banner.
-            emit statusMessage(proxy.lastError());
+            emit statusMessage(error);
         }
-    }
+        markConnected();
+    });
+}
 
+void VpnCore::markConnected()
+{
     setCoreStatus(Running);
     emit connected();
     emit statusMessage(QStringLiteral("VPN connected"));
@@ -276,8 +214,14 @@ void VpnCore::handleEngineReady()
 
 void VpnCore::handleEngineFailure(const QString &error)
 {
+    // The engine died while we were stopping it anyway: that is the stop completing.
+    if (m_coreStatus == Stopping) {
+        finishStopping();
+        return;
+    }
+
     // Whatever went wrong, the desktop must not be left pointing at a port that is gone.
-    SystemProxy::instance().revert();
+    SystemProxy::instance().revertAsync(this, nullptr);
 
     const bool wasConnected = m_coreStatus == Running;
     fail(error);

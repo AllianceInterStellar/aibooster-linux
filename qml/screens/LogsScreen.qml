@@ -11,7 +11,7 @@ Item {
         color: "#080620"
     }
 
-    property var levelNames: ["All", "Debug", "Info", "Warning", "Error", "Fatal"]
+    property var levelNames: [qsTr("All"), qsTr("Debug"), qsTr("Info"), qsTr("Warning"), qsTr("Error"), qsTr("Fatal")]
     property int selectedLevel: 0
 
     ColumnLayout {
@@ -24,7 +24,7 @@ Item {
             spacing: 12
 
             Text {
-                text: "Logs"
+                text: qsTr("Logs")
                 font.pixelSize: 22
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -45,7 +45,7 @@ Item {
                     anchors.fill: parent
                     anchors.leftMargin: 12
                     anchors.rightMargin: 12
-                    placeholderText: "Filter logs..."
+                    placeholderText: qsTr("Filter logs...")
                     placeholderTextColor: "#6B7280"
                     color: "#E5E7EB"
                     font.pixelSize: 13
@@ -62,7 +62,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "Clear"
+                    text: qsTr("Clear")
                     font.pixelSize: 13
                     font.weight: Font.Medium
                     color: "#F87171"

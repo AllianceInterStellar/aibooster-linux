@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SystemProxy.h"
 
+#include "../core/PrivateFiles.h"
+
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPointer>
 #include <QProcess>
 #include <QStandardPaths>
 
@@ -89,6 +92,64 @@ SystemProxy::SystemProxy(QObject *parent)
     : QObject(parent)
     , m_backend(detectBackend())
 {
+    m_worker.setMaxThreadCount(1);
+}
+
+QString SystemProxy::lastError() const
+{
+    QMutexLocker lock(&m_errorMutex);
+    return m_lastError;
+}
+
+void SystemProxy::setLastError(const QString &error)
+{
+    QMutexLocker lock(&m_errorMutex);
+    m_lastError = error;
+}
+
+void SystemProxy::waitForPending()
+{
+    m_worker.waitForDone();
+}
+
+bool SystemProxy::apply(const QString &host, quint16 port)
+{
+    waitForPending();
+    return doApply(host, port);
+}
+
+void SystemProxy::revert()
+{
+    waitForPending();
+    doRevert();
+}
+
+void SystemProxy::applyAsync(const QString &host, quint16 port, QObject *context,
+                             std::function<void(bool, const QString &)> done)
+{
+    QPointer<QObject> guard(context);
+    m_worker.start([this, host, port, guard, done]() {
+        const bool ok = doApply(host, port);
+        const QString error = ok ? QString() : lastError();
+        // Posted to this object, which lives on the UI thread for the whole run, and the
+        // guard checked there: testing it here would race with `context` being destroyed.
+        QMetaObject::invokeMethod(this, [guard, done, ok, error]() {
+            if (guard && done)
+                done(ok, error);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void SystemProxy::revertAsync(QObject *context, std::function<void()> done)
+{
+    QPointer<QObject> guard(context);
+    m_worker.start([this, guard, done]() {
+        doRevert();
+        QMetaObject::invokeMethod(this, [guard, done]() {
+            if (guard && done)
+                done();
+        }, Qt::QueuedConnection);
+    });
 }
 
 SystemProxy &SystemProxy::instance()
@@ -136,20 +197,23 @@ QString SystemProxy::statePath()
             + QStringLiteral("/.local/state");
     }
     const QString dir = base + QStringLiteral("/aibooster");
-    QDir().mkpath(dir);
+    PrivateFiles::ensureDir(dir);
     return dir + QStringLiteral("/system-proxy-restore.json");
 }
 
 bool SystemProxy::writeState(const QJsonObject &state)
 {
+    // The file is only useful if it survives a power cut mid-write, and it is tiny, so pay
+    // for an atomic, synced replace rather than risk restoring from a truncated document.
+    return PrivateFiles::write(statePath(), QJsonDocument(state).toJson(QJsonDocument::Indented));
+}
+
+QJsonObject SystemProxy::readState()
+{
     QFile file(statePath());
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        return false;
-    file.write(QJsonDocument(state).toJson(QJsonDocument::Indented));
-    file.close();
-    // The file is only useful if it survives a power cut mid-write, and it is tiny, so
-    // pay for the flush rather than risk restoring from a truncated document.
-    return true;
+    if (!file.open(QIODevice::ReadOnly))
+        return QJsonObject();
+    return QJsonDocument::fromJson(file.readAll()).object();
 }
 
 void SystemProxy::clearState()
@@ -304,68 +368,84 @@ bool SystemProxy::restoreKde(const QJsonObject &saved)
     return ok;
 }
 
-bool SystemProxy::apply(const QString &host, quint16 port)
+bool SystemProxy::doApply(const QString &host, quint16 port)
 {
     if (m_backend == None) {
-        m_lastError = QStringLiteral(
+        setLastError(tr(
             "This desktop has no proxy settings this client knows how to drive, so the "
             "system proxy was left alone. Point your browser at %1:%2 manually.")
                           .arg(host)
-                          .arg(port);
+                          .arg(port));
         return false;
     }
 
     if (m_applied)
         return true;
 
+    // A state file still on disk means an earlier restore did not go through, so the desktop
+    // may still be pointed at us. Capturing now would record OUR settings as "the user's"
+    // and overwrite the only copy of the real ones; keep the file and restore from it later.
+    const QString backendKey = m_backend == GSettings ? QStringLiteral("gsettings")
+                                                      : QStringLiteral("kde");
+    const QJsonObject pending = readState();
+    const bool reusePending =
+        pending.value(QStringLiteral("backend")).toString() == backendKey;
+
     // Save first. If we crash between here and the apply below, recoverFromPreviousRun()
     // restores settings that were never changed, which is harmless; the opposite ordering
     // would leave a redirected desktop with nothing to restore from.
-    const QJsonObject saved = m_backend == GSettings ? captureGSettings() : captureKde();
-    if (!writeState(saved)) {
-        m_lastError = QStringLiteral("Could not save the current proxy settings to %1; "
-                                     "refusing to change them.")
-                          .arg(statePath());
+    const QJsonObject saved = reusePending ? pending
+                              : m_backend == GSettings ? captureGSettings()
+                                                       : captureKde();
+    if (!reusePending && !writeState(saved)) {
+        setLastError(tr("Could not save the current proxy settings to %1; "
+                                    "refusing to change them.")
+                         .arg(statePath()));
         return false;
     }
 
     const bool ok = m_backend == GSettings ? applyGSettings(host, port) : applyKde(host, port);
     if (!ok) {
-        m_lastError = QStringLiteral("Failed to set the system proxy via %1.").arg(backendName());
-        // Undo whatever partially landed, then drop the state file.
-        if (m_backend == GSettings)
-            restoreGSettings(saved);
-        else
-            restoreKde(saved);
-        clearState();
+        setLastError(tr("Failed to set the system proxy via %1.").arg(backendName()));
+        // Undo whatever partially landed. The state file goes only once that worked: it is the
+        // one record of the settings to go back to.
+        const bool restored =
+            m_backend == GSettings ? restoreGSettings(saved) : restoreKde(saved);
+        if (restored)
+            clearState();
         return false;
     }
 
     m_applied = true;
-    m_lastError.clear();
+    setLastError(QString());
     emit appliedChanged(true);
     return true;
 }
 
-void SystemProxy::revert()
+void SystemProxy::doRevert()
 {
-    if (!m_applied) {
-        // Still clear a stale file: a failed apply may have left one behind.
-        clearState();
+    // Nothing of ours is live. Any state file left on disk belongs to a restore that has not
+    // gone through yet, and deleting it would throw away the only way back.
+    if (!m_applied)
         return;
-    }
 
-    QFile file(statePath());
-    QJsonObject saved;
-    if (file.open(QIODevice::ReadOnly))
-        saved = QJsonDocument::fromJson(file.readAll()).object();
-
+    const QJsonObject saved = readState();
+    bool restored = false;
     if (m_backend == GSettings)
-        restoreGSettings(saved);
+        restored = restoreGSettings(saved);
     else if (m_backend == Kde)
-        restoreKde(saved);
+        restored = restoreKde(saved);
 
-    clearState();
+    if (restored) {
+        clearState();
+    } else {
+        // Keep the file: the next launch's recoverFromPreviousRun() retries from it.
+        const QString error = QStringLiteral("Could not restore the system proxy via %1; it "
+                                             "will be retried the next time the app starts.")
+                                  .arg(backendName());
+        setLastError(error);
+        qWarning("%s", qPrintable(error));
+    }
     m_applied = false;
     emit appliedChanged(false);
 }
@@ -384,11 +464,23 @@ bool SystemProxy::recoverFromPreviousRun()
     file.close();
 
     const QString backend = saved.value(QStringLiteral("backend")).toString();
-    if (backend == QLatin1String("gsettings"))
-        restoreGSettings(saved);
-    else if (backend == QLatin1String("kde"))
-        restoreKde(saved);
+    bool restored = false;
+    if (backend == QLatin1String("gsettings")) {
+        restored = restoreGSettings(saved);
+    } else if (backend == QLatin1String("kde")) {
+        restored = restoreKde(saved);
+    } else {
+        // Unreadable or from an unknown backend: nothing we could ever replay.
+        clearState();
+        return false;
+    }
 
+    if (!restored) {
+        // Keep it and try again next launch; apply() reuses it meanwhile.
+        qWarning("Could not restore the system proxy left behind by a previous run; "
+                 "keeping %s to retry", qPrintable(statePath()));
+        return false;
+    }
     clearState();
     return true;
 }

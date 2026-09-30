@@ -22,7 +22,7 @@ Item {
             spacing: 12
 
             Text {
-                text: "Proxies"
+                text: qsTr("Proxies")
                 font.pixelSize: 22
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -43,7 +43,7 @@ Item {
                     anchors.fill: parent
                     anchors.leftMargin: 12
                     anchors.rightMargin: 12
-                    placeholderText: "Search..."
+                    placeholderText: qsTr("Search...")
                     placeholderTextColor: "#6B7280"
                     color: "#E5E7EB"
                     font.pixelSize: 13
@@ -60,7 +60,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "Test All"
+                    text: qsTr("Test All")
                     font.pixelSize: 13
                     font.weight: Font.Medium
                     color: "#FFFFFF"
@@ -149,8 +149,8 @@ Item {
         Text {
             Layout.alignment: Qt.AlignHCenter
             text: searchField.text === ""
-                  ? proxyList.count + " proxies"
-                  : proxyList.count + " of " + ProxyListModel.count + " proxies"
+                  ? qsTr("%n proxies", "", proxyList.count)
+                  : qsTr("%1 of %n proxies", "", ProxyListModel.count).arg(proxyList.count)
             font.pixelSize: 12
             color: "#6B7280"
         }
@@ -166,7 +166,7 @@ Item {
 
         function onSelectionApplied(name) {
             selectionNotice.isError = false
-            selectionNotice.message = "Traffic is now going through \"" + name + "\"."
+            selectionNotice.message = qsTr("Traffic is now going through \"%1\".").arg(name)
         }
     }
 }

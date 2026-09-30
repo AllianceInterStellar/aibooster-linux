@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkInformation>
 #include <QNetworkProxy>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -50,6 +51,14 @@ const QStringList &ipEndpoints()
 
 ConnectionModel *ConnectionModel::s_instance = nullptr;
 
+const QList<int> &ConnectionModel::reconnectDelaysSeconds()
+{
+    // Quick at first (most drops are the engine restarting or a brief network blip), then
+    // backing off so a server that is really gone is not hammered.
+    static const QList<int> delays{2, 5, 10, 30, 60};
+    return delays;
+}
+
 ConnectionModel::ConnectionModel(QObject *parent)
     : QObject(parent)
 {
@@ -62,9 +71,27 @@ ConnectionModel::ConnectionModel(QObject *parent)
     connect(m_vpnCore, &VpnCore::disconnected, this, &ConnectionModel::onVpnDisconnected);
     connect(m_vpnCore, &VpnCore::errorOccurred, this, &ConnectionModel::onVpnError);
     connect(m_vpnCore, &VpnCore::statusMessage, this, &ConnectionModel::onVpnStatusMessage);
+    connect(m_vpnCore, &VpnCore::engineLogLine, this, &ConnectionModel::logLine);
 
     m_statsTimer.setInterval(kStatsIntervalMs);
     connect(&m_statsTimer, &QTimer::timeout, this, &ConnectionModel::pollStats);
+
+    m_reconnectTimer.setSingleShot(true);
+    connect(&m_reconnectTimer, &QTimer::timeout, this, &ConnectionModel::onReconnectTimer);
+
+    // Knowing when the network is down lets a reconnect wait for it instead of spending its
+    // attempts on a machine that is offline (a laptop lid closed, Wi-Fi switching). Without
+    // a backend (no NetworkManager) every check reads "not known to be down", which is the
+    // behaviour we had before.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 4, 0)
+    QNetworkInformation::loadBackendByFeatures(QNetworkInformation::Feature::Reachability);
+#else
+    QNetworkInformation::load(QNetworkInformation::Feature::Reachability);
+#endif
+    if (QNetworkInformation *info = QNetworkInformation::instance()) {
+        connect(info, &QNetworkInformation::reachabilityChanged, this,
+                &ConnectionModel::onReachabilityChanged);
+    }
 
     // main.cpp builds SettingsModel and ProfileListModel after this one, so the auto-connect
     // decision has to wait for the event loop — every singleton exists by then.
@@ -89,7 +116,7 @@ QString ConnectionModel::ipAddress() const { return m_ipAddress; }
 QString ConnectionModel::activeProxyName() const { return m_activeProxyName; }
 QString ConnectionModel::activeProxyType() const { return m_activeProxyType; }
 QString ConnectionModel::activeProxyCountry() const { return m_activeProxyCountry; }
-QString ConnectionModel::statusLog() const { return m_statusLog; }
+QString ConnectionModel::statusLog() const { return m_statusLog.join(QLatin1Char('\n')); }
 QString ConnectionModel::sessionNotice() const { return m_sessionNotice; }
 bool ConnectionModel::sessionNoticeIsError() const { return m_sessionNoticeIsError; }
 
@@ -104,11 +131,15 @@ void ConnectionModel::setSessionNotice(const QString &message, bool isError)
 
 void ConnectionModel::dismissSessionNotice()
 {
+    // The ✕ on a "reconnecting in…" banner means "stop trying", not just "hide this".
+    stopReconnecting();
     setSessionNotice({}, false);
 }
 
 void ConnectionModel::toggleConnection()
 {
+    // Whatever the user asked for replaces any reconnect we had planned.
+    stopReconnecting();
     switch (m_status) {
     case Disconnected:
         setStatus(Connecting);
@@ -118,13 +149,33 @@ void ConnectionModel::toggleConnection()
         setStatus(Disconnecting);
         m_vpnCore->disconnectVpn();
         break;
+    case Connecting:
+        cancelConnect();
+        break;
     default:
         break;
     }
 }
 
+void ConnectionModel::cancelConnect()
+{
+    // A slow config can take the engine up to two minutes to come up. Being unable to back
+    // out of that — the button used to ignore clicks while connecting — is how users end up
+    // killing the whole app, which is the one exit that cannot restore the desktop proxy.
+    ++m_attempt;   // orphans a free-node fetch still in flight
+    m_reconnectAfterDisconnect = false;
+    onVpnStatusMessage(QStringLiteral("Connection cancelled"));
+    setStatus(Disconnecting);
+    // While the engine is starting this stops it, and onVpnDisconnected() finishes the job
+    // once it has gone. While the free nodes are still being fetched there is no engine,
+    // and nothing else will move us on.
+    if (!m_vpnCore->disconnectVpn())
+        setStatus(Disconnected);
+}
+
 void ConnectionModel::retryConnection()
 {
+    stopReconnecting();
     setSessionNotice({}, false);
     switch (m_status) {
     case Connected:
@@ -173,20 +224,23 @@ void ConnectionModel::startConnect()
 void ConnectionModel::connectFree()
 {
     m_pendingProxyName = QStringLiteral("AiBooster Free");
-    // NOT connectVpn(FreeProfiles::kPrimaryUrl): that URL answers a profile INDEX, and handing
-    // the index to the core yields a config with zero outbounds — the core reports nothing and
-    // the app would claim "Connected" with no tunnel. FreeProfiles::fetch() resolves the index
-    // to a real subscription body first.
+    const quint64 attempt = m_attempt;
+    // Not the endpoint URL itself: it answers a profile INDEX, and handing the index to the
+    // core yields a config with zero outbounds — the core reports nothing and the app would
+    // claim "Connected" with no tunnel. FreeProfiles::fetch() resolves the index to a real
+    // subscription body first.
     m_freeProfiles->fetch(
-        [this](const QString &config) {
-            if (m_status != Connecting)
-                return; // the attempt was abandoned while the fetch ran
+        [this, attempt](const QString &config) {
+            // Abandoned while the fetch ran. The status alone cannot tell: a cancel followed
+            // by a fresh connect is back at Connecting, and must not start a second engine.
+            if (m_status != Connecting || attempt != m_attempt)
+                return;
             m_vpnCore->connectVpnWithConfig(config);
         },
-        [this](const QString &error) {
-            if (m_status != Connecting)
+        [this, attempt](const QString &error) {
+            if (m_status != Connecting || attempt != m_attempt)
                 return;
-            onVpnError(QStringLiteral("Could not fetch the free nodes: %1").arg(error));
+            onVpnError(tr("Could not fetch the free nodes: %1").arg(error));
         });
 }
 
@@ -199,6 +253,7 @@ void ConnectionModel::onVpnConnected()
     m_ipAddress = QStringLiteral("Checking…");
     resetStats();
     // A successful connect answers whatever the last failure was complaining about.
+    stopReconnecting();
     setSessionNotice({}, false);
     setStatus(Connected);
     emit statsChanged();
@@ -233,15 +288,127 @@ void ConnectionModel::onVpnDisconnected()
     }
 }
 
+void ConnectionModel::appendStatusLog(const QString &line)
+{
+    // Bounded: this used to grow for as long as the app ran, one line per engine message.
+    constexpr int kMaxStatusLines = 200;
+    m_statusLog.append(line);
+    if (m_statusLog.size() > kMaxStatusLines)
+        m_statusLog.erase(m_statusLog.begin(), m_statusLog.end() - kMaxStatusLines);
+    emit statusLogChanged();
+    // The Logs page shows these next to the engine's own lines, so "Connecting…" and the
+    // reason a connect failed are where the user looks for them.
+    emit logLine(line);
+}
+
 void ConnectionModel::onVpnError(const QString &error)
 {
-    m_statusLog += "ERROR: " + error + "\n";
-    emit statusLogChanged();
+    // A tunnel that was up and went down, or a reconnect attempt that failed, is worth
+    // retrying. A first connect that fails is not: that is a bad config or no network, and
+    // retrying it in a loop would only bury the reason.
+    const bool dropped = m_status == Connected || m_reconnectAttempt > 0;
+
+    // "ERROR " so the Logs page files it under Error.
+    appendStatusLog(QStringLiteral("ERROR ") + error);
     m_reconnectAfterDisconnect = false;
     stopStatsPolling();
     setStatus(Disconnected);
+
+    // Decided before connectionFailed goes out, so listeners (the tray's notification) can
+    // tell "reconnecting" from "gave up" by reading reconnecting().
+    const bool retrying = dropped && scheduleReconnect(error);
     emit connectionFailed(error);
-    setSessionNotice(QStringLiteral("Could not connect: %1").arg(error), true);
+    if (!retrying)
+        setSessionNotice(tr("Could not connect: %1").arg(error), true);
+}
+
+bool ConnectionModel::scheduleReconnect(const QString &error)
+{
+    if (!SettingsModel::instance() || !SettingsModel::instance()->autoReconnect()) {
+        stopReconnecting();
+        return false;
+    }
+
+    const QList<int> &delays = reconnectDelaysSeconds();
+    if (m_reconnectAttempt >= delays.size()) {
+        stopReconnecting();
+        setSessionNotice(tr("Connection lost, and %1 attempts to reconnect failed: %2")
+                             .arg(delays.size())
+                             .arg(error),
+                         true);
+        return true;
+    }
+
+    m_lastDropError = error;
+    setReconnectAttempt(m_reconnectAttempt + 1);
+    const int seconds = delays.at(m_reconnectAttempt - 1);
+    m_reconnectTimer.start(seconds * 1000);
+    onVpnStatusMessage(QStringLiteral("Reconnecting in %1 s (attempt %2 of %3)")
+                           .arg(seconds)
+                           .arg(m_reconnectAttempt)
+                           .arg(delays.size()));
+    setSessionNotice(tr("Connection lost: %1. Reconnecting in %2 s (attempt %3 of %4)…")
+                         .arg(error)
+                         .arg(seconds)
+                         .arg(m_reconnectAttempt)
+                         .arg(delays.size()),
+                     true);
+    return true;
+}
+
+void ConnectionModel::onReconnectTimer()
+{
+    if (m_reconnectAttempt == 0 || m_status != Disconnected)
+        return;
+    if (networkIsDown()) {
+        // Does not use up an attempt: onReachabilityChanged() resumes when it is back.
+        m_waitingForNetwork = true;
+        onVpnStatusMessage(QStringLiteral("Waiting for the network to reconnect"));
+        setSessionNotice(tr("Connection lost: %1. Waiting for the network…")
+                             .arg(m_lastDropError),
+                         true);
+        return;
+    }
+    m_waitingForNetwork = false;
+    onVpnStatusMessage(QStringLiteral("Reconnecting (attempt %1 of %2)")
+                           .arg(m_reconnectAttempt)
+                           .arg(reconnectDelaysSeconds().size()));
+    setStatus(Connecting);
+    startConnect();
+}
+
+void ConnectionModel::onReachabilityChanged()
+{
+    if (networkIsDown())
+        return;
+    // Back online while a reconnect waits: go now rather than at the end of the backoff.
+    if (m_reconnectAttempt > 0 && m_status == Disconnected
+        && (m_waitingForNetwork || m_reconnectTimer.isActive())) {
+        m_reconnectTimer.stop();
+        onReconnectTimer();
+    }
+}
+
+bool ConnectionModel::networkIsDown()
+{
+    const QNetworkInformation *info = QNetworkInformation::instance();
+    return info && info->reachability() == QNetworkInformation::Reachability::Disconnected;
+}
+
+void ConnectionModel::stopReconnecting()
+{
+    m_reconnectTimer.stop();
+    m_waitingForNetwork = false;
+    m_lastDropError.clear();
+    setReconnectAttempt(0);
+}
+
+void ConnectionModel::setReconnectAttempt(int attempt)
+{
+    const bool was = reconnecting();
+    m_reconnectAttempt = attempt;
+    if (was != reconnecting())
+        emit reconnectingChanged();
 }
 
 void ConnectionModel::resetStats()
@@ -323,7 +490,8 @@ void ConnectionModel::lookupIpAddress(int endpointIndex)
     // Go through the core's own mixed inbound: the desktop app is not inside the tunnel unless
     // TUN or the system proxy happens to be on, and asking directly would report the machine's
     // real IP as if it were the exit node's. Re-read the port every time — it is user-editable.
-    const int mixedPort = SettingsModel::instance() ? SettingsModel::instance()->mixedPort() : 2334;
+    const int mixedPort = SettingsModel::instance() ? SettingsModel::instance()->mixedPort()
+                                                    : SettingsModel::kDefaultMixedPort;
     m_ipLookup->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, QStringLiteral("127.0.0.1"),
                                        static_cast<quint16>(mixedPort)));
 
@@ -348,6 +516,5 @@ void ConnectionModel::lookupIpAddress(int endpointIndex)
 
 void ConnectionModel::onVpnStatusMessage(const QString &message)
 {
-    m_statusLog += message + "\n";
-    emit statusLogChanged();
+    appendStatusLog(message);
 }

@@ -2,7 +2,6 @@
 #ifndef VPNCORE_H
 #define VPNCORE_H
 
-#include <QNetworkAccessManager>
 #include <QObject>
 #include <QString>
 
@@ -22,7 +21,6 @@ class VpnCore : public QObject
 public:
     enum CoreStatus {
         Idle,
-        Downloading,
         Starting,
         Running,
         Stopping,
@@ -33,13 +31,14 @@ public:
     explicit VpnCore(QObject *parent = nullptr);
     ~VpnCore() override;
 
-    void connectVpn(const QString &subscriptionUrl);
-
-    /// Connect from config content already in hand (an active profile's stored payload or
-    /// the free nodes' subscription body) — same pipeline as connectVpn minus the download.
+    /// Connect from config content already in hand: an active profile's stored payload, or
+    /// the free nodes' subscription body.
     void connectVpnWithConfig(const QString &configContent);
 
-    void disconnectVpn();
+    /// Stops a running engine, or abandons one that is still starting. Returns at once;
+    /// disconnected() follows when the engine has gone. Returns false when there was
+    /// nothing to stop, in which case no signal follows.
+    bool disconnectVpn();
 
     /// Where the engine's per-run files live. The ONLY definition of these paths — the proxy
     /// list reads the running config back from here, and a second hardcoded copy silently
@@ -47,10 +46,6 @@ public:
     /// rebuilding the path.
     static QString engineDir();
     static QString runningConfigPath();
-
-    /// True when the payload can actually yield a tunnel (engine JSON with outbounds, or a
-    /// share-link/base64 subscription). Public for the headless tests.
-    static bool isUsableConfig(const QByteArray &configData);
 
     CoreStatus coreStatus() const { return m_coreStatus; }
     QString lastError() const { return m_lastError; }
@@ -60,19 +55,20 @@ signals:
     void disconnected();
     void errorOccurred(const QString &error);
     void statusMessage(const QString &message);
+    /// One line of the engine's own output. Client-side progress goes to statusMessage().
+    void engineLogLine(const QString &line);
 
 private:
-    void downloadSubscription(const QString &url);
     void launchEngine(const QString &configContent);
     void handleEngineReady();
     void handleEngineFailure(const QString &error);
-    void teardown();
+    void markConnected();
+    void finishStopping();
     void setCoreStatus(CoreStatus status);
     void fail(const QString &message);
 
 
     CoreProcess *m_core;
-    QNetworkAccessManager m_network;
 
     CoreStatus m_coreStatus = Idle;
     QString m_lastError;

@@ -27,7 +27,7 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "AiBooster VPN"
+            text: qsTr("AiBooster VPN")
             font.pixelSize: 28
             font.weight: Font.Bold
             color: "#E9D5FF"
@@ -35,7 +35,7 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "Version " + Application.version
+            text: qsTr("Version %1").arg(Application.version)
             font.pixelSize: 14
             color: "#9CA3AF"
         }
@@ -57,12 +57,12 @@ Item {
                 anchors.margins: 16
                 spacing: 12
 
-                InfoRow { label: "Platform"; value: Qt.platform.os }
+                InfoRow { label: qsTr("Platform"); value: Qt.platform.os }
                 // The real runtime version, not a hardcoded "6.x" that goes stale silently.
-                InfoRow { label: "Qt Version"; value: qtRuntimeVersion }
-                InfoRow { label: "Build"; value: "QML + C++" }
-                InfoRow { label: "Engine"; value: "AI Booster Engine" }
-                InfoRow { label: "License"; value: "GPLv3" }
+                InfoRow { label: qsTr("Qt Version"); value: qtRuntimeVersion }
+                InfoRow { label: qsTr("Build"); value: "QML + C++" }
+                InfoRow { label: qsTr("Engine"); value: "AI Booster Engine" }
+                InfoRow { label: qsTr("License"); value: "GPLv3" }
             }
         }
 
@@ -75,12 +75,12 @@ Item {
             spacing: 20
 
             LegalLink {
-                text: "Privacy Policy"
+                text: qsTr("Privacy Policy")
                 url: "https://allianceinterstellar.com/en/legal/privacy"
             }
 
             LegalLink {
-                text: "Terms of Service"
+                text: qsTr("Terms of Service")
                 url: "https://allianceinterstellar.com/en/legal/terms"
             }
         }
@@ -89,7 +89,7 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "Built with ❤️ for privacy"
+            text: qsTr("Built with ❤️ for privacy")
             font.pixelSize: 13
             color: "#6B7280"
         }
@@ -101,7 +101,7 @@ Item {
 
         LegalLink {
             Layout.alignment: Qt.AlignHCenter
-            text: "Open source licenses"
+            text: qsTr("Open source licenses")
             font.pixelSize: 12
             onActivated: aboutScreen.showLicenses = true
         }

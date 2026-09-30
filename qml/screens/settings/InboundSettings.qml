@@ -42,7 +42,7 @@ Item {
             }
 
             Text {
-                text: "Inbound Settings"
+                text: qsTr("Inbound Settings")
                 font.pixelSize: 20
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -63,19 +63,19 @@ Item {
                 spacing: 16
 
                 PortField {
-                    label: "Mixed Port"
+                    label: qsTr("Mixed Port")
                     value: SettingsModel.mixedPort
                     onEdited: function(v) { SettingsModel.mixedPort = v }
                 }
 
                 PortField {
-                    label: "Local DNS Port"
+                    label: qsTr("Local DNS Port")
                     value: SettingsModel.localDnsPort
                     onEdited: function(v) { SettingsModel.localDnsPort = v }
                 }
 
                 Text {
-                    text: "Connection Test URL"
+                    text: qsTr("Connection Test URL")
                     font.pixelSize: 13
                     font.weight: Font.Medium
                     color: "#A78BFA"

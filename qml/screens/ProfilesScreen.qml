@@ -21,7 +21,7 @@ Item {
             Layout.fillWidth: true
 
             Text {
-                text: "Profiles"
+                text: qsTr("Profiles")
                 font.pixelSize: 22
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -39,7 +39,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    text: ProfileListModel.loading ? "…" : "Refresh"
+                    text: ProfileListModel.loading ? "…" : qsTr("Refresh")
                     font.pixelSize: 13
                     color: "#A78BFA"
                 }
@@ -62,7 +62,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "＋ Add Profile"
+                    text: qsTr("＋ Add Profile")
                     font.pixelSize: 13
                     font.weight: Font.Medium
                     color: "#FFFFFF"
@@ -108,7 +108,7 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: ProfileListModel.count + " profiles"
+            text: qsTr("%n profile(s)", "", ProfileListModel.count)
             font.pixelSize: 12
             color: "#6B7280"
         }
@@ -119,7 +119,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(480, profilesScreen.width - 48)
         modal: true
-        title: "Add Profile"
+        title: qsTr("Add Profile")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
         // NOT named reset(): Dialog already has a reset() signal, and shadowing it makes QML log an
@@ -147,7 +147,7 @@ Item {
                 // one clean off the dialog.
                 Layout.preferredWidth: addDialog.availableWidth
                 Layout.maximumWidth: addDialog.availableWidth
-                text: "Paste a subscription URL, a config link (vmess/vless/ss/trojan…), or the raw config content."
+                text: qsTr("Paste a subscription URL, a config link (vmess/vless/ss/trojan…), or the raw config content.")
                 font.pixelSize: 12
                 color: "#9CA3AF"
                 wrapMode: Text.WordWrap
@@ -156,7 +156,7 @@ Item {
             TextField {
                 id: urlField
                 Layout.fillWidth: true
-                placeholderText: "https://… or vmess://…"
+                placeholderText: qsTr("https://… or vmess://…")
                 color: "#E9D5FF"
                 background: Rectangle {
                     color: "#080620"
@@ -169,7 +169,7 @@ Item {
             TextField {
                 id: nameField
                 Layout.fillWidth: true
-                placeholderText: "Name (optional — taken from the subscription if blank)"
+                placeholderText: qsTr("Name (optional — taken from the subscription if blank)")
                 color: "#E9D5FF"
                 background: Rectangle {
                     color: "#080620"
@@ -193,7 +193,7 @@ Item {
         onAccepted: {
             var input = urlField.text.trim()
             if (input === "") {
-                errorText.text = "Enter a subscription URL or config link."
+                errorText.text = qsTr("Enter a subscription URL or config link.")
                 open()          // keep the dialog up instead of silently doing nothing
                 return
             }

@@ -4,7 +4,7 @@
 #include <QAbstractListModel>
 #include <QQmlEngine>
 #include <QSortFilterProxyModel>
-#include <QTimer>
+#include <QStringList>
 
 class LogFilterModel;
 
@@ -41,6 +41,12 @@ public:
     Q_INVOKABLE void clearLogs();
     Q_INVOKABLE void togglePause();
 
+    /// Adds one line: the engine's output, or the client's own progress and errors. The
+    /// engine logs to stdout, which CoreProcess captures; there is no log file to read. (An earlier version tailed data/box.log, but
+    /// the engine only writes a file when its settings name one, and ours never did — so
+    /// the Logs page stayed empty.)
+    void appendLine(const QString &line);
+
 signals:
     void isPausedChanged();
 
@@ -51,18 +57,13 @@ private:
         QString message;
     };
 
-    /// Path the core writes to: base dir (AppDataLocation, per VpnCore::setupAndStart) + data/box.log.
-    static QString logFilePath();
-    void poll();
     void appendLines(const QStringList &lines);
     static LogEntry parseLine(const QString &line, const QString &fallbackTime);
 
     QVector<LogEntry> m_logs;
     LogFilterModel *m_filterModel = nullptr;
     bool m_isPaused = false;
-    QTimer *m_timer = nullptr;
-    qint64 m_readPosition = 0;   ///< byte offset in box.log already consumed
-    QString m_partialLine;       ///< trailing bytes of an unterminated last line
+    QStringList m_heldWhilePaused;
 };
 
 class LogFilterModel : public QSortFilterProxyModel

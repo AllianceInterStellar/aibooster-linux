@@ -54,7 +54,7 @@ CoreProcess::CoreProcess(QObject *parent)
     connect(&m_process, &QProcess::finished, this, &CoreProcess::handleFinished);
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
-            m_lastError = QStringLiteral("The VPN engine could not be started: %1")
+            m_lastError = tr("The VPN engine could not be started: %1")
                               .arg(m_process.errorString());
             setState(Failed);
             emit failed(m_lastError);
@@ -63,12 +63,23 @@ CoreProcess::CoreProcess(QObject *parent)
 
     m_readyTimer.setInterval(kReadyPollMs);
     connect(&m_readyTimer, &QTimer::timeout, this, &CoreProcess::pollReadiness);
+
+    m_killTimer.setSingleShot(true);
+    m_killTimer.setInterval(kStopGraceMs);
+    connect(&m_killTimer, &QTimer::timeout, this, [this]() {
+        if (m_process.state() == QProcess::NotRunning)
+            return;
+        emit logLine(QStringLiteral("Engine ignored SIGTERM; sending SIGKILL"));
+        m_process.kill();
+    });
 }
 
 CoreProcess::~CoreProcess()
 {
     // Never leave an orphaned engine behind: it holds the proxy ports, so the next launch
-    // would fail to bind and the user would be left with a half-working machine.
+    // would fail to bind and the user would be left with a half-working machine. This is
+    // the one place that waits: the process is exiting and there is no UI left to freeze.
+    m_process.disconnect(this);
     if (m_process.state() != QProcess::NotRunning) {
         m_process.terminate();
         if (!m_process.waitForFinished(3000))
@@ -126,14 +137,19 @@ void CoreProcess::start(const QString &configPath, const QString &settingsPath,
                         quint16 proxyPort)
 {
     if (m_state == Starting || m_state == Running) {
-        m_lastError = QStringLiteral("The VPN engine is already running");
+        m_lastError = tr("The VPN engine is already running");
+        emit failed(m_lastError);
+        return;
+    }
+    if (m_state == Stopping || m_process.state() != QProcess::NotRunning) {
+        m_lastError = tr("The previous VPN engine is still shutting down");
         emit failed(m_lastError);
         return;
     }
 
     const QString binary = locateBinary();
     if (binary.isEmpty()) {
-        m_lastError = QStringLiteral(
+        m_lastError = tr(
                           "The VPN engine binary (aibooster-core) was not found.\n\n"
                           "This client is the user interface only; the engine ships separately.\n"
                           "Looked in:\n  %1")
@@ -168,20 +184,19 @@ void CoreProcess::start(const QString &configPath, const QString &settingsPath,
 void CoreProcess::stop()
 {
     m_readyTimer.stop();
+    clearProbes();
 
     if (m_process.state() == QProcess::NotRunning) {
         setState(Stopped);
+        emit stopped();
         return;
     }
+    if (m_state == Stopping)
+        return;   // already on its way; stopped() will follow
 
     setState(Stopping);
     m_process.terminate();
-    if (!m_process.waitForFinished(5000)) {
-        emit logLine(QStringLiteral("Engine ignored SIGTERM; sending SIGKILL"));
-        m_process.kill();
-        m_process.waitForFinished(2000);
-    }
-    setState(Stopped);
+    m_killTimer.start();
 }
 
 void CoreProcess::pollReadiness()
@@ -197,20 +212,29 @@ void CoreProcess::pollReadiness()
         return;
     }
 
+    // Last tick's attempts had their chance; one that has not connected by now never will
+    // on a loopback port.
+    clearProbes();
+
     // Try both loopback families: the engine brings up one inbound per family and, when
     // the machine prefers IPv6, the v4 listener can lag or be absent entirely. Probing only
     // 127.0.0.1 would then report "never became ready" for a working tunnel.
+    //
+    // Asynchronously: this runs four times a second for up to two minutes, and the blocking
+    // waitForConnected() it used to call froze the UI for most of every tick.
     for (const QHostAddress &loopback : {QHostAddress(QHostAddress::LocalHost),
                                          QHostAddress(QHostAddress::LocalHostIPv6)}) {
-        QTcpSocket probe;
-        probe.connectToHost(loopback, m_proxyPort);
-        if (probe.waitForConnected(150)) {
-            probe.abort();
+        auto *probe = new QTcpSocket(this);
+        m_probes.append(probe);
+        connect(probe, &QTcpSocket::connected, this, [this]() {
+            if (m_state != Starting)
+                return;
+            clearProbes();
             m_readyTimer.stop();
             setState(Running);
             emit ready();
-            return;
-        }
+        });
+        probe->connectToHost(loopback, m_proxyPort);
     }
 
     // Say something while a slow config comes up. Silence for two minutes is
@@ -222,15 +246,28 @@ void CoreProcess::pollReadiness()
 
     if (++m_readyAttempts >= kReadyMaxAttempts) {
         m_readyTimer.stop();
-        m_lastError = QStringLiteral(
+        clearProbes();
+        m_lastError = tr(
                           "The VPN engine started but never opened its proxy port (%1), so "
                           "no traffic could go through it. Last output:\n%2")
                           .arg(m_proxyPort)
                           .arg(m_stderrTail.trimmed());
-        stop();
         setState(Failed);
         emit failed(m_lastError);
+        // It has had two minutes; it does not get a grace period as well. handleFinished()
+        // sees Failed and does not report this a second time.
+        m_process.kill();
     }
+}
+
+void CoreProcess::clearProbes()
+{
+    for (QTcpSocket *probe : std::as_const(m_probes)) {
+        probe->disconnect(this);
+        probe->abort();
+        probe->deleteLater();
+    }
+    m_probes.clear();
 }
 
 void CoreProcess::drainOutput()
@@ -266,19 +303,24 @@ void CoreProcess::drainOutput()
 void CoreProcess::handleFinished(int exitCode, QProcess::ExitStatus status)
 {
     m_readyTimer.stop();
+    m_killTimer.stop();
+    clearProbes();
     drainOutput();
 
     // An orderly stop() already moved us to Stopping; anything else is the engine dying
     // underneath us, which the caller must hear about so it can undo the system proxy.
     if (m_state == Stopping || m_state == Stopped) {
         setState(Stopped);
-        emit stoppedCleanly();
+        emit stopped();
         return;
     }
+    // Already reported (the readiness timeout kills it after saying why).
+    if (m_state == Failed)
+        return;
 
     m_lastError = status == QProcess::CrashExit
-        ? QStringLiteral("The VPN engine crashed. Last output:\n%1").arg(m_stderrTail.trimmed())
-        : QStringLiteral("The VPN engine exited unexpectedly (code %1). Last output:\n%2")
+        ? tr("The VPN engine crashed. Last output:\n%1").arg(m_stderrTail.trimmed())
+        : tr("The VPN engine exited unexpectedly (code %1). Last output:\n%2")
               .arg(exitCode)
               .arg(m_stderrTail.trimmed());
 

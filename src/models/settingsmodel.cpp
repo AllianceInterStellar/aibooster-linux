@@ -2,6 +2,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
 #include <QSettings>
 #include <QStringList>
 
@@ -46,6 +47,9 @@ void SettingsModel::load()
     m_systemProxy        = st.value("systemProxy", m_systemProxy).toBool();
     m_tunMode            = st.value("tunMode", m_tunMode).toBool();
     m_autoConnect        = st.value("autoConnect", m_autoConnect).toBool();
+    m_autoReconnect      = st.value("autoReconnect", m_autoReconnect).toBool();
+    m_closeToTray        = st.value("closeToTray", m_closeToTray).toBool();
+    m_language           = st.value("language", m_language).toString();
     m_enableIPv6         = st.value("enableIPv6", m_enableIPv6).toBool();
     m_remoteDns          = st.value("remoteDns", m_remoteDns).toString();
     m_directDns          = st.value("directDns", m_directDns).toString();
@@ -75,6 +79,7 @@ void SettingsModel::load()
 
     // Anything stored by an older build (or hand-edited) that the core would not recognise
     // falls back to the default rather than being handed over and silently ignored.
+    if (!m_language.isEmpty() && !availableLanguages().contains(m_language)) m_language.clear();
     if (!warpModes().contains(m_warpMode)) m_warpMode = warpModes().first();
     if (!regions().contains(m_region)) m_region = QStringLiteral("other");
     if (!balancerStrategies().contains(m_balancerStrategy))
@@ -90,6 +95,9 @@ void SettingsModel::persist() const
     st.setValue("systemProxy", m_systemProxy);
     st.setValue("tunMode", m_tunMode);
     st.setValue("autoConnect", m_autoConnect);
+    st.setValue("autoReconnect", m_autoReconnect);
+    st.setValue("closeToTray", m_closeToTray);
+    st.setValue("language", m_language);
     st.setValue("enableIPv6", m_enableIPv6);
     st.setValue("remoteDns", m_remoteDns);
     st.setValue("directDns", m_directDns);
@@ -111,6 +119,33 @@ void SettingsModel::persist() const
     st.setValue("resolveDestination", m_resolveDestination);
     st.setValue("balancerStrategy", m_balancerStrategy);
     st.endGroup();
+}
+
+QString SettingsModel::clashApiSecret()
+{
+    // Generated once so every request of this run, and the settings file handed to the
+    // engine, agree. 128 bits from the OS CSPRNG.
+    static const QString secret = [] {
+        quint32 words[4];
+        QRandomGenerator::system()->fillRange(words);
+        return QString::fromLatin1(
+            QByteArray(reinterpret_cast<const char *>(words), sizeof(words)).toHex());
+    }();
+    return secret;
+}
+
+QStringList SettingsModel::availableLanguages()
+{
+    return {QStringLiteral("en"), QStringLiteral("zh_CN")};
+}
+
+void SettingsModel::setLanguage(const QString &v)
+{
+    if ((!v.isEmpty() && !availableLanguages().contains(v)) || m_language == v)
+        return;
+    m_language = v;
+    persist();
+    emit changed();
 }
 
 bool SettingsModel::isValidRange(const QString &v)

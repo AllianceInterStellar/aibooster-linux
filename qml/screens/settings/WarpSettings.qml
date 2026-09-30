@@ -42,7 +42,7 @@ Item {
             }
 
             Text {
-                text: "WARP Settings"
+                text: qsTr("WARP Settings")
                 font.pixelSize: 20
                 font.weight: Font.Bold
                 color: "#E9D5FF"
@@ -71,13 +71,13 @@ Item {
                         spacing: 2
 
                         Text {
-                            text: "Enable WARP"
+                            text: qsTr("Enable WARP")
                             font.pixelSize: 14
                             color: "#D1D5DB"
                         }
 
                         Text {
-                            text: "Cloudflare WARP for enhanced privacy"
+                            text: qsTr("Cloudflare WARP for enhanced privacy")
                             font.pixelSize: 11
                             color: "#6B7280"
                         }
@@ -112,7 +112,7 @@ Item {
                     opacity: SettingsModel.warpEnabled ? 1.0 : 0.4
 
                     Text {
-                        text: "WARP Mode"
+                        text: qsTr("WARP Mode")
                         font.pixelSize: 13
                         font.weight: Font.Medium
                         color: "#A78BFA"
@@ -122,10 +122,10 @@ Item {
                         // config.WarpOptions.Mode — the only two values the core's builder
                         // tests for. Anything else is dropped on the floor by the core.
                         model: [
-                            { id: "proxy_over_warp", label: "Proxy over WARP",
-                              desc: "Reach the proxy through WARP" },
-                            { id: "warp_over_proxy", label: "WARP over Proxy",
-                              desc: "Reach WARP through the proxy" }
+                            { id: "proxy_over_warp", label: qsTr("Proxy over WARP"),
+                              desc: qsTr("Reach the proxy through WARP") },
+                            { id: "warp_over_proxy", label: qsTr("WARP over Proxy"),
+                              desc: qsTr("Reach WARP through the proxy") }
                         ]
 
                         delegate: Rectangle {

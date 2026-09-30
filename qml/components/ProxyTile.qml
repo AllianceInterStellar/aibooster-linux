@@ -61,7 +61,7 @@ Rectangle {
             Text {
                 id: delayLabel
                 anchors.centerIn: parent
-                text: tile.delay < 0 ? "—" : tile.delay + " ms"
+                text: tile.delay < 0 ? "—" : qsTr("%1 ms").arg(tile.delay)
                 font.pixelSize: 11
                 color: {
                     if (tile.delay < 0) return "#9CA3AF"

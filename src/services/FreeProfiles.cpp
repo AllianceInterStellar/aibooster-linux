@@ -57,7 +57,7 @@ QStringList FreeProfiles::configuredEndpoints(const QStringList &urls)
 
 QString FreeProfiles::unconfiguredMessage()
 {
-    return QStringLiteral(
+    return tr(
         "This build has no free-node endpoint. It was compiled without -DAIBOOSTER_FREE_URL, "
         "so it cannot fetch the free nodes. Add a profile of your own under Profiles, or see "
         "README.md → Deployment configuration.");
@@ -68,7 +68,7 @@ void FreeProfiles::tryGet(const QStringList &urls, int index,
                           std::function<void(QString)> onError)
 {
     if (index >= urls.size()) {
-        if (onError) onError(QStringLiteral("All free config endpoints failed"));
+        if (onError) onError(tr("All free config endpoints failed"));
         return;
     }
 

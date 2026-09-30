@@ -1,17 +1,11 @@
 #include "logsmodel.h"
 
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
 #include <QRegularExpression>
-#include <QStandardPaths>
 #include <QTime>
 
 namespace {
-// Tail rather than load: box.log grows without bound while the core runs.
+// The engine logs for as long as it runs; keep the most recent lines only.
 constexpr int kMaxLogEntries = 500;
-constexpr qint64 kTailReadBytes = 256 * 1024;
-constexpr int kPollIntervalMs = 2000;
 
 const char kLevelTokens[] = "TRACE|DEBUG|INFO|WARN|ERROR|FATAL|PANIC";
 
@@ -37,69 +31,19 @@ LogsModel::LogsModel(QObject *parent)
     // start — a null one leaves the Logs page permanently empty.
     m_filterModel = new LogFilterModel(this);
     m_filterModel->setSourceModel(this);
-
-    m_timer = new QTimer(this);
-    m_timer->setInterval(kPollIntervalMs);
-    connect(m_timer, &QTimer::timeout, this, &LogsModel::poll);
-    m_timer->start();
-    poll();   // don't make the user wait a full interval for the first screenful
 }
 
-QString LogsModel::logFilePath()
+void LogsModel::appendLine(const QString &line)
 {
-    // VpnCore::setupAndStart passes AppDataLocation as the core's base dir, and the generated
-    // The engine writes its log to the relative path data/box.log.
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/data/box.log";
-}
-
-void LogsModel::poll()
-{
-    if (m_isPaused)
-        return;
-
-    QFile f(logFilePath());
-    if (!f.exists()) {
-        // The core hasn't run yet (or its data dir was wiped on the next start).
-        if (m_readPosition != 0 || !m_logs.isEmpty()) {
-            m_readPosition = 0;
-            m_partialLine.clear();
-            clearLogs();
-        }
+    // Paused means "stop scrolling so I can read", not "lose what happens meanwhile". Hold
+    // the lines back and deliver them on resume, capped like the list itself.
+    if (m_isPaused) {
+        m_heldWhilePaused.append(line);
+        if (m_heldWhilePaused.size() > kMaxLogEntries)
+            m_heldWhilePaused.remove(0, m_heldWhilePaused.size() - kMaxLogEntries);
         return;
     }
-
-    const qint64 size = QFileInfo(f).size();
-    if (size < m_readPosition) {
-        // Rotated or truncated — start over rather than reading from a stale offset.
-        m_readPosition = 0;
-        m_partialLine.clear();
-        clearLogs();
-    }
-    if (size == m_readPosition)
-        return;
-
-    if (!f.open(QIODevice::ReadOnly))
-        return;
-
-    // On the first poll of an already-large file, skip to the last chunk.
-    qint64 from = m_readPosition;
-    if (size - from > kTailReadBytes) {
-        from = size - kTailReadBytes;
-        m_partialLine.clear();   // we've almost certainly landed mid-line
-    }
-    f.seek(from);
-    const QByteArray chunk = f.read(size - from);
-    f.close();
-    m_readPosition = size;
-
-    QString text = m_partialLine + QString::fromUtf8(chunk);
-    m_partialLine.clear();
-    QStringList lines = text.split(QLatin1Char('\n'));
-    // A chunk boundary can split a line; hold the tail until the rest arrives.
-    if (!text.endsWith(QLatin1Char('\n')) && !lines.isEmpty())
-        m_partialLine = lines.takeLast();
-
-    appendLines(lines);
+    appendLines({line});
 }
 
 void LogsModel::appendLines(const QStringList &lines)
@@ -188,6 +132,11 @@ void LogsModel::setIsPaused(bool paused)
 {
     if (m_isPaused != paused) {
         m_isPaused = paused;
+        if (!paused && !m_heldWhilePaused.isEmpty()) {
+            const QStringList held = m_heldWhilePaused;
+            m_heldWhilePaused.clear();
+            appendLines(held);
+        }
         emit isPausedChanged();
     }
 }
@@ -196,6 +145,7 @@ void LogsModel::clearLogs()
 {
     beginResetModel();
     m_logs.clear();
+    m_heldWhilePaused.clear();
     endResetModel();
 }
 

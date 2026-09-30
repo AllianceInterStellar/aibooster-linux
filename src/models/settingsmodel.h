@@ -11,6 +11,10 @@ class SettingsModel : public QObject
     Q_PROPERTY(bool systemProxy READ systemProxy WRITE setSystemProxy NOTIFY changed)
     Q_PROPERTY(bool tunMode READ tunMode WRITE setTunMode NOTIFY changed)
     Q_PROPERTY(bool autoConnect READ autoConnect WRITE setAutoConnect NOTIFY changed)
+    Q_PROPERTY(bool autoReconnect READ autoReconnect WRITE setAutoReconnect NOTIFY changed)
+    Q_PROPERTY(bool closeToTray READ closeToTray WRITE setCloseToTray NOTIFY changed)
+    /// "" follows the system locale; otherwise one of availableLanguages().
+    Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY changed)
     Q_PROPERTY(bool enableIPv6 READ enableIPv6 WRITE setEnableIPv6 NOTIFY changed)
     Q_PROPERTY(QString remoteDns READ remoteDns WRITE setRemoteDns NOTIFY changed)
     Q_PROPERTY(QString directDns READ directDns WRITE setDirectDns NOTIFY changed)
@@ -44,6 +48,21 @@ public:
 
     bool autoConnect() const { return m_autoConnect; }
     void setAutoConnect(bool v) { if (m_autoConnect != v) { m_autoConnect = v; persist(); emit changed(); } }
+
+    /// Reconnect by itself when an established tunnel drops. Never retries a connect that
+    /// failed from the start: that is a bad config or no network, and a loop would hide it.
+    bool autoReconnect() const { return m_autoReconnect; }
+    void setAutoReconnect(bool v) { if (m_autoReconnect != v) { m_autoReconnect = v; persist(); emit changed(); } }
+
+    /// Closing the window keeps the app (and the tunnel) running in the system tray, when
+    /// the desktop has one.
+    bool closeToTray() const { return m_closeToTray; }
+    void setCloseToTray(bool v) { if (m_closeToTray != v) { m_closeToTray = v; persist(); emit changed(); } }
+
+    QString language() const { return m_language; }
+    void setLanguage(const QString &v);
+    /// Language codes the UI is translated into, besides the English source.
+    static QStringList availableLanguages();
 
     bool enableIPv6() const { return m_enableIPv6; }
     void setEnableIPv6(bool v) { if (m_enableIPv6 != v) { m_enableIPv6 = v; persist(); emit changed(); } }
@@ -102,8 +121,6 @@ public:
     static SettingsModel *instance() { return s_instance; }
 
     /// Clash API the running core exposes. The secret is a fixed string rather than empty:
-    /// config.BuildConfig invents a random 16-char secret for an empty `web-secret`, and the
-    /// app could then never authenticate against its own core (traffic stats, node switching).
     /// The engine's mixed (HTTP+SOCKS) inbound. Also the port the system proxy is
     /// pointed at, so it must agree with m_mixedPort's initialiser below.
     static constexpr int kDefaultMixedPort = 2334;
@@ -113,11 +130,19 @@ public:
     static constexpr int kDefaultUrlTestIntervalSeconds = 600;
 
     static quint16 clashApiPort() { return 18756; }
-    static QString clashApiSecret() { return QStringLiteral("aibooster-clash-api"); }
+    /// Bearer secret for the engine's control API, random per process and never stored.
+    ///
+    /// It must be set: config.BuildConfig invents a random secret for an empty `web-secret`,
+    /// and the app could then never authenticate against its own engine (traffic stats, node
+    /// switching). It must not be a constant: this source is public, and the API listens on
+    /// loopback where every local account — and every local process — can reach it. With a
+    /// fixed secret any of them could switch the user's nodes or list their connections.
+    static QString clashApiSecret();
 
     /// The engine's options JSON. Key names verified against the engine's own options
     /// struct (see NOTICE.md for where the engine comes from);
-    /// the core MERGES this onto its defaults, so omitting a key keeps the sensible default.
+    /// the engine does NOT merge this onto its defaults (see the note in the .cpp), so every
+    /// key whose zero value is invalid is written explicitly.
     QByteArray buildEngineSettingsJson() const;
 
     /// "<min>-<max>", min <= max — the only shape config.TLSTricks parses.
@@ -135,6 +160,9 @@ private:
     bool m_systemProxy = true;
     bool m_tunMode = false;
     bool m_autoConnect = false;
+    bool m_autoReconnect = true;
+    bool m_closeToTray = true;
+    QString m_language;
     bool m_enableIPv6 = false;
     QString m_remoteDns = "udp://1.1.1.1";
     QString m_directDns = "Auto";
