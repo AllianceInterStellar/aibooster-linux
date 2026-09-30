@@ -2,7 +2,6 @@
 #ifndef VPNCORE_H
 #define VPNCORE_H
 
-#include <QNetworkAccessManager>
 #include <QObject>
 #include <QString>
 
@@ -22,7 +21,6 @@ class VpnCore : public QObject
 public:
     enum CoreStatus {
         Idle,
-        Downloading,
         Starting,
         Running,
         Stopping,
@@ -33,12 +31,11 @@ public:
     explicit VpnCore(QObject *parent = nullptr);
     ~VpnCore() override;
 
-    void connectVpn(const QString &subscriptionUrl);
-
-    /// Connect from config content already in hand (an active profile's stored payload or
-    /// the free nodes' subscription body) — same pipeline as connectVpn minus the download.
+    /// Connect from config content already in hand: an active profile's stored payload, or
+    /// the free nodes' subscription body.
     void connectVpnWithConfig(const QString &configContent);
 
+    /// Stops a running engine, or abandons one that is still starting.
     void disconnectVpn();
 
     /// Where the engine's per-run files live. The ONLY definition of these paths — the proxy
@@ -60,9 +57,10 @@ signals:
     void disconnected();
     void errorOccurred(const QString &error);
     void statusMessage(const QString &message);
+    /// One line of the engine's own output, for the Logs page.
+    void engineLogLine(const QString &line);
 
 private:
-    void downloadSubscription(const QString &url);
     void launchEngine(const QString &configContent);
     void handleEngineReady();
     void handleEngineFailure(const QString &error);
@@ -72,7 +70,6 @@ private:
 
 
     CoreProcess *m_core;
-    QNetworkAccessManager m_network;
 
     CoreStatus m_coreStatus = Idle;
     QString m_lastError;

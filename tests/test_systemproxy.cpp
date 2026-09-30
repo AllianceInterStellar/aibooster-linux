@@ -58,6 +58,8 @@ private slots:
     void loopbackIsExcludedFromTheProxy();
     void recoveryUndoesAProxyLeftBehindByAKilledRun();
     void recoveryIsANoOpWithNoStateFile();
+    void stateFileIsOwnerOnly();
+    void applyKeepsTheOriginalsAnUnfinishedRestoreLeftBehind();
 };
 
 void TestSystemProxy::initTestCase()
@@ -142,6 +144,43 @@ void TestSystemProxy::recoveryIsANoOpWithNoStateFile()
     const QString modeBefore = proxyMode();
     QVERIFY(!SystemProxy::recoverFromPreviousRun());
     QCOMPARE(proxyMode(), modeBefore);
+}
+
+void TestSystemProxy::stateFileIsOwnerOnly()
+{
+    SystemProxy &proxy = SystemProxy::instance();
+    QVERIFY(proxy.apply(QStringLiteral("127.0.0.1"), 2334));
+    const QFileDevice::Permissions others =
+        QFileDevice::ReadGroup | QFileDevice::WriteGroup | QFileDevice::ReadOther
+        | QFileDevice::WriteOther;
+    QCOMPARE(QFile::permissions(statePath()) & others, QFileDevice::Permissions());
+    proxy.revert();
+}
+
+void TestSystemProxy::applyKeepsTheOriginalsAnUnfinishedRestoreLeftBehind()
+{
+    // A restore that failed (say, no session bus yet at start-up) leaves the desktop still
+    // pointed at us AND the state file holding the user's real settings. Connecting again
+    // must not capture our own leftover settings over that file: the revert would then
+    // "restore" the redirect and the user's originals would be gone for good.
+    const QString modeBefore = proxyMode();
+    QCOMPARE(modeBefore, QStringLiteral("'none'"));
+
+    QJsonObject originals{{QStringLiteral("backend"), QStringLiteral("gsettings")},
+                          {QStringLiteral("mode"), QStringLiteral("none")}};
+    QFile file(statePath());
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    file.write(QJsonDocument(originals).toJson());
+    file.close();
+    gsettings({QStringLiteral("set"), QStringLiteral("org.gnome.system.proxy"),
+               QStringLiteral("mode"), QStringLiteral("manual")});
+
+    SystemProxy &proxy = SystemProxy::instance();
+    QVERIFY(proxy.apply(QStringLiteral("127.0.0.1"), 2334));
+    proxy.revert();
+
+    QCOMPARE(proxyMode(), modeBefore);
+    QVERIFY(!QFile::exists(statePath()));
 }
 
 QTEST_MAIN(TestSystemProxy)

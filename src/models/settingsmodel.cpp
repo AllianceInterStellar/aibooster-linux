@@ -2,6 +2,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
 #include <QSettings>
 #include <QStringList>
 
@@ -111,6 +112,19 @@ void SettingsModel::persist() const
     st.setValue("resolveDestination", m_resolveDestination);
     st.setValue("balancerStrategy", m_balancerStrategy);
     st.endGroup();
+}
+
+QString SettingsModel::clashApiSecret()
+{
+    // Generated once so every request of this run, and the settings file handed to the
+    // engine, agree. 128 bits from the OS CSPRNG.
+    static const QString secret = [] {
+        quint32 words[4];
+        QRandomGenerator::system()->fillRange(words);
+        return QString::fromLatin1(
+            QByteArray(reinterpret_cast<const char *>(words), sizeof(words)).toHex());
+    }();
+    return secret;
 }
 
 bool SettingsModel::isValidRange(const QString &v)

@@ -62,6 +62,7 @@ ConnectionModel::ConnectionModel(QObject *parent)
     connect(m_vpnCore, &VpnCore::disconnected, this, &ConnectionModel::onVpnDisconnected);
     connect(m_vpnCore, &VpnCore::errorOccurred, this, &ConnectionModel::onVpnError);
     connect(m_vpnCore, &VpnCore::statusMessage, this, &ConnectionModel::onVpnStatusMessage);
+    connect(m_vpnCore, &VpnCore::engineLogLine, this, &ConnectionModel::engineLogLine);
 
     m_statsTimer.setInterval(kStatsIntervalMs);
     connect(&m_statsTimer, &QTimer::timeout, this, &ConnectionModel::pollStats);
@@ -118,9 +119,28 @@ void ConnectionModel::toggleConnection()
         setStatus(Disconnecting);
         m_vpnCore->disconnectVpn();
         break;
+    case Connecting:
+        cancelConnect();
+        break;
     default:
         break;
     }
+}
+
+void ConnectionModel::cancelConnect()
+{
+    // A slow config can take the engine up to two minutes to come up. Being unable to back
+    // out of that — the button used to ignore clicks while connecting — is how users end up
+    // killing the whole app, which is the one exit that cannot restore the desktop proxy.
+    ++m_attempt;   // orphans a free-node fetch still in flight
+    m_reconnectAfterDisconnect = false;
+    onVpnStatusMessage(QStringLiteral("Connection cancelled"));
+    setStatus(Disconnecting);
+    // Emits disconnected() when the engine was starting; a no-op while the free nodes are
+    // still being fetched, in which case nothing else will move us on.
+    m_vpnCore->disconnectVpn();
+    if (m_status == Disconnecting)
+        setStatus(Disconnected);
 }
 
 void ConnectionModel::retryConnection()
@@ -173,18 +193,21 @@ void ConnectionModel::startConnect()
 void ConnectionModel::connectFree()
 {
     m_pendingProxyName = QStringLiteral("AiBooster Free");
+    const quint64 attempt = m_attempt;
     // NOT connectVpn(FreeProfiles::kPrimaryUrl): that URL answers a profile INDEX, and handing
     // the index to the core yields a config with zero outbounds — the core reports nothing and
     // the app would claim "Connected" with no tunnel. FreeProfiles::fetch() resolves the index
     // to a real subscription body first.
     m_freeProfiles->fetch(
-        [this](const QString &config) {
-            if (m_status != Connecting)
-                return; // the attempt was abandoned while the fetch ran
+        [this, attempt](const QString &config) {
+            // Abandoned while the fetch ran. The status alone cannot tell: a cancel followed
+            // by a fresh connect is back at Connecting, and must not start a second engine.
+            if (m_status != Connecting || attempt != m_attempt)
+                return;
             m_vpnCore->connectVpnWithConfig(config);
         },
-        [this](const QString &error) {
-            if (m_status != Connecting)
+        [this, attempt](const QString &error) {
+            if (m_status != Connecting || attempt != m_attempt)
                 return;
             onVpnError(QStringLiteral("Could not fetch the free nodes: %1").arg(error));
         });

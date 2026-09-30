@@ -26,6 +26,7 @@ private slots:
     void autoDnsBecomesAConcreteAddress();
     void explicitDnsIsPreserved();
     void portsAreWithinRange();
+    void controlApiSecretIsRandomNotAConstant();
 
 private:
     QJsonObject build() const;
@@ -118,6 +119,18 @@ void TestEngineSettings::portsAreWithinRange()
     // as an unexplained "engine never became ready".
     QVERIFY(o.value(QStringLiteral("mixed-port")).toInt()
             != o.value(QStringLiteral("clash-api-port")).toInt());
+}
+
+void TestEngineSettings::controlApiSecretIsRandomNotAConstant()
+{
+    // The control API listens on loopback, reachable by every local account. A secret that
+    // is written in this (public) source protects nothing.
+    const QString secret = SettingsModel::clashApiSecret();
+    QCOMPARE(secret.size(), 32);
+    QVERIFY(secret != QStringLiteral("aibooster-clash-api"));
+    // Stable within a run: the engine is started with it and every request must match.
+    QCOMPARE(SettingsModel::clashApiSecret(), secret);
+    QCOMPARE(build().value(QStringLiteral("web-secret")).toString(), secret);
 }
 
 QTEST_MAIN(TestEngineSettings)

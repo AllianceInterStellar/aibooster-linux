@@ -1,5 +1,7 @@
 #include "profilelistmodel.h"
 
+#include "../core/PrivateFiles.h"
+
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -10,7 +12,6 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
-#include <QSaveFile>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QUrl>
@@ -827,7 +828,9 @@ void ProfileListModel::setLoadingDelta(int delta)
 QString ProfileListModel::storagePath() const
 {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(dir);
+    // Owner-only: profiles hold the user's subscription URLs and node credentials, and this
+    // directory is also the parent of the engine's.
+    PrivateFiles::ensureDir(dir);
     return dir + QStringLiteral("/profiles.json");
 }
 
@@ -893,10 +896,10 @@ void ProfileListModel::save() const
     QJsonObject root;
     root.insert(QStringLiteral("profiles"), array);
 
-    // QSaveFile keeps the on-disk list intact if the write is interrupted.
-    QSaveFile file(storagePath());
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        return;
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    file.commit();
+    // Atomic, so an interrupted write leaves the previous list intact; owner-only, because
+    // it is full of credentials.
+    QString error;
+    if (!PrivateFiles::write(storagePath(), QJsonDocument(root).toJson(QJsonDocument::Indented),
+                             &error))
+        qWarning("%s", qPrintable(error));
 }

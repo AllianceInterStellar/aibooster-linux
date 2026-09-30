@@ -45,6 +45,8 @@ qt_add_executable(aibooster
     src/main.cpp
     src/core/CoreProcess.cpp
     src/core/CoreProcess.h
+    src/core/PrivateFiles.cpp
+    src/core/PrivateFiles.h
     src/platform/SystemProxy.cpp
     src/platform/SystemProxy.h
     src/models/connectionmodel.cpp
@@ -137,6 +139,7 @@ if(AIBOOSTER_BUILD_TESTS)
         tests/test_deeplinks.cpp
         src/models/profilelistmodel.cpp
         src/models/profilelistmodel.h
+        src/core/PrivateFiles.cpp
     )
     target_link_libraries(test_deeplinks PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
     add_test(NAME deeplinks COMMAND test_deeplinks)
@@ -145,6 +148,7 @@ if(AIBOOSTER_BUILD_TESTS)
         tests/test_systemproxy.cpp
         src/platform/SystemProxy.cpp
         src/platform/SystemProxy.h
+        src/core/PrivateFiles.cpp
     )
     target_link_libraries(test_systemproxy PRIVATE Qt6::Test)
     add_test(NAME systemproxy COMMAND test_systemproxy)
@@ -162,6 +166,36 @@ if(AIBOOSTER_BUILD_TESTS)
     )
     target_link_libraries(test_freeprofiles PRIVATE Qt6::Test Qt6::Network)
     add_test(NAME freeprofiles COMMAND test_freeprofiles)
+
+    qt_add_executable(test_privatefiles
+        tests/test_privatefiles.cpp
+        src/core/PrivateFiles.cpp
+    )
+    target_link_libraries(test_privatefiles PRIVATE Qt6::Test)
+    add_test(NAME privatefiles COMMAND test_privatefiles)
+
+    qt_add_executable(test_logsmodel
+        tests/test_logsmodel.cpp
+        src/models/logsmodel.cpp
+        src/models/logsmodel.h
+    )
+    target_link_libraries(test_logsmodel PRIVATE Qt6::Test Qt6::Quick)
+    add_test(NAME logsmodel COMMAND test_logsmodel)
+
+    # Against a stub engine; links the pieces VpnCore drives (engine supervision, the
+    # desktop proxy, the control API client) but never the real engine.
+    qt_add_executable(test_vpncore
+        tests/test_vpncore.cpp
+        src/models/vpncore.cpp
+        src/models/vpncore.h
+        src/models/settingsmodel.cpp
+        src/core/CoreProcess.cpp
+        src/core/PrivateFiles.cpp
+        src/platform/SystemProxy.cpp
+        src/services/ClashApi.cpp
+    )
+    target_link_libraries(test_vpncore PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
+    add_test(NAME vpncore COMMAND test_vpncore)
 endif()
 
 # ── Install (XDG layout) ─────────────────────────────────────────────────────────────

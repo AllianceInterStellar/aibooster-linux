@@ -7,6 +7,7 @@
 #include <QSocketNotifier>
 
 #include <csignal>
+#include <fcntl.h>
 #include <cstdlib>
 #include <unistd.h>
 
@@ -37,7 +38,10 @@ void forwardSignal(int)
 /// the desktop still redirected at a port that is about to disappear.
 void installSignalHandling(QGuiApplication *app)
 {
-    if (::pipe(g_signalPipe) != 0)
+    // O_CLOEXEC: without it every child — the engine included — inherits both ends of this
+    // pipe for its whole lifetime. O_NONBLOCK: a burst of signals that fills the pipe must
+    // drop bytes, not block inside the handler.
+    if (::pipe2(g_signalPipe, O_CLOEXEC | O_NONBLOCK) != 0)
         return;
 
     auto *notifier = new QSocketNotifier(g_signalPipe[0], QSocketNotifier::Read, app);
@@ -87,6 +91,7 @@ int main(int argc, char *argv[])
     auto *profiles = new ProfileListModel(&engine);
     auto *logs = new LogsModel(&engine);
     auto *settings = new SettingsModel(&engine);
+    QObject::connect(conn, &ConnectionModel::engineLogLine, logs, &LogsModel::appendEngineLine);
 
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ConnectionModel", conn);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ProxyListModel", proxies);

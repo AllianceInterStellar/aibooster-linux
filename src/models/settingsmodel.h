@@ -102,8 +102,6 @@ public:
     static SettingsModel *instance() { return s_instance; }
 
     /// Clash API the running core exposes. The secret is a fixed string rather than empty:
-    /// config.BuildConfig invents a random 16-char secret for an empty `web-secret`, and the
-    /// app could then never authenticate against its own core (traffic stats, node switching).
     /// The engine's mixed (HTTP+SOCKS) inbound. Also the port the system proxy is
     /// pointed at, so it must agree with m_mixedPort's initialiser below.
     static constexpr int kDefaultMixedPort = 2334;
@@ -113,11 +111,19 @@ public:
     static constexpr int kDefaultUrlTestIntervalSeconds = 600;
 
     static quint16 clashApiPort() { return 18756; }
-    static QString clashApiSecret() { return QStringLiteral("aibooster-clash-api"); }
+    /// Bearer secret for the engine's control API, random per process and never stored.
+    ///
+    /// It must be set: config.BuildConfig invents a random secret for an empty `web-secret`,
+    /// and the app could then never authenticate against its own engine (traffic stats, node
+    /// switching). It must not be a constant: this source is public, and the API listens on
+    /// loopback where every local account — and every local process — can reach it. With a
+    /// fixed secret any of them could switch the user's nodes or list their connections.
+    static QString clashApiSecret();
 
     /// The engine's options JSON. Key names verified against the engine's own options
     /// struct (see NOTICE.md for where the engine comes from);
-    /// the core MERGES this onto its defaults, so omitting a key keeps the sensible default.
+    /// the engine does NOT merge this onto its defaults (see the note in the .cpp), so every
+    /// key whose zero value is invalid is written explicitly.
     QByteArray buildEngineSettingsJson() const;
 
     /// "<min>-<max>", min <= max — the only shape config.TLSTricks parses.

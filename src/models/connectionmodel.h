@@ -76,11 +76,15 @@ signals:
     /// The connect attempt failed. statusLog alone is not enough — nothing binds it, so a
     /// failed connect used to leave the button snapping back with no explanation at all.
     void connectionFailed(const QString &error);
+    /// One line of the engine's own output, for the Logs page.
+    void engineLogLine(const QString &line);
 
 private:
     /// Picks the config source: the active user profile, otherwise the free nodes.
     void startConnect();
     void connectFree();
+    /// Abandons the attempt in progress, whichever step it is at.
+    void cancelConnect();
     void onVpnConnected();
     void onVpnDisconnected();
     void onVpnError(const QString &error);
@@ -114,6 +118,8 @@ private:
     QString m_pendingProxyName;
     /// Set by retryConnection() so the disconnect it triggers rolls straight into a connect.
     bool m_reconnectAfterDisconnect = false;
+    /// Bumped by every cancel, so asynchronous steps of an abandoned attempt can tell.
+    quint64 m_attempt = 0;
 
     Status m_status = Disconnected;
     QString m_uploadSpeed = "0 B/s";

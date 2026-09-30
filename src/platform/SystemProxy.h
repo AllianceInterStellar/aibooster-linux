@@ -45,11 +45,14 @@ public:
     bool apply(const QString &host, quint16 port);
 
     /// Restores whatever was saved by apply(). Safe to call when nothing was applied.
+    /// The saved state is deleted only once the restore has gone through; otherwise it is
+    /// kept so the next launch can retry.
     void revert();
 
     /// Call once at start-up, BEFORE any connection can be made: if the previous run was
     /// killed while the proxy was redirected, this puts the desktop back.
-    /// Returns true when it actually had to undo something.
+    /// Returns true when it actually undid something. A restore that fails keeps the saved
+    /// state for the next attempt and returns false.
     static bool recoverFromPreviousRun();
 
 signals:
@@ -70,6 +73,7 @@ private:
     static bool applyKde(const QString &host, quint16 port);
 
     static bool writeState(const QJsonObject &state);
+    static QJsonObject readState();
     static void clearState();
 
     Backend m_backend;
