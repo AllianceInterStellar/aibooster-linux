@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#include <QGuiApplication>
+#include <QApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -17,6 +17,7 @@
 #include "models/proxylistmodel.h"
 #include "models/settingsmodel.h"
 #include "platform/SystemProxy.h"
+#include "platform/TrayIcon.h"
 
 namespace {
 
@@ -36,7 +37,7 @@ void forwardSignal(int)
 /// Quit cleanly on Ctrl-C and on `systemctl`/session-manager shutdown, so the destructors
 /// that put the system proxy back actually run. Without this the process is torn down with
 /// the desktop still redirected at a port that is about to disappear.
-void installSignalHandling(QGuiApplication *app)
+void installSignalHandling(QCoreApplication *app)
 {
     // O_CLOEXEC: without it every child — the engine included — inherits both ends of this
     // pipe for its whole lifetime. O_NONBLOCK: a burst of signals that fills the pipe must
@@ -65,7 +66,9 @@ void installSignalHandling(QGuiApplication *app)
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app(argc, argv);
+    // QApplication rather than QGuiApplication only for the tray icon, which Qt implements
+    // in Widgets. The UI itself is all QML.
+    QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("AiBooster"));
     app.setOrganizationName(QStringLiteral("AiBooster"));
     app.setApplicationVersion(QStringLiteral(AIBOOSTER_VERSION));
@@ -98,6 +101,13 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "ProfileListModel", profiles);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "LogsModel", logs);
     qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "SettingsModel", settings);
+
+    auto *tray = new TrayIcon(conn, &engine, &engine);
+    qmlRegisterSingletonInstance("AiBooster.Models", 1, 0, "Tray", tray);
+    // With a tray, closing the window can mean "keep running"; Main.qml decides, and quits
+    // explicitly when it does not. Without one, closing the window quits as it always did.
+    if (tray->available())
+        app.setQuitOnLastWindowClosed(false);
 
     // The real Qt this binary is linked against. The About panel used to print a hardcoded
     // "6.x", which stayed right by being too vague to be wrong.

@@ -44,6 +44,9 @@ Item {
                     SettingsToggle { label: "System Proxy"; checked: SettingsModel.systemProxy; onToggled: SettingsModel.systemProxy = checked }
                     SettingsToggle { label: "TUN Mode"; checked: SettingsModel.tunMode; onToggled: SettingsModel.tunMode = checked }
                     SettingsToggle { label: "Auto Connect"; checked: SettingsModel.autoConnect; onToggled: SettingsModel.autoConnect = checked }
+                    SettingsToggle { label: "Auto Reconnect"; checked: SettingsModel.autoReconnect; onToggled: SettingsModel.autoReconnect = checked }
+                    // Only where the desktop has a tray; elsewhere closing always quits.
+                    SettingsToggle { visible: Tray.available; label: "Keep Running in Tray"; checked: SettingsModel.closeToTray; onToggled: SettingsModel.closeToTray = checked }
                     // No "Per-App Proxy" here: per-process routing would have to go through
                     // the engine's rule list, and that whole branch is commented out in this
                     // core build, so the switch could only ever have been decorative.

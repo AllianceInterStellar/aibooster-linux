@@ -17,7 +17,7 @@ include(GNUInstallDirs)
 
 # 6.2, not 6.4: Ubuntu 22.04 LTS ships Qt 6.2 and is supported until 2027. Verified
 # building and running there — see README.
-find_package(Qt6 6.2 REQUIRED COMPONENTS Quick QuickControls2 Network)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Quick QuickControls2 Network Widgets)
 # qt_standard_project_setup() only exists from Qt 6.3.
 if(COMMAND qt_standard_project_setup)
     qt_standard_project_setup()
@@ -49,6 +49,8 @@ qt_add_executable(aibooster
     src/core/PrivateFiles.h
     src/platform/SystemProxy.cpp
     src/platform/SystemProxy.h
+    src/platform/TrayIcon.cpp
+    src/platform/TrayIcon.h
     src/models/connectionmodel.cpp
     src/models/logsmodel.cpp
     src/models/profilelistmodel.cpp
@@ -94,6 +96,9 @@ qt_add_qml_module(aibooster
         qml/icons/about.svg
         qml/icons/shield.svg
         qml/icons/shield-check.svg
+        qml/icons/tray-off.svg
+        qml/icons/tray-connecting.svg
+        qml/icons/tray-on.svg
 )
 
 target_compile_definitions(aibooster PRIVATE
@@ -106,6 +111,7 @@ target_link_libraries(aibooster PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Network
+    Qt6::Widgets
 )
 
 # ── Tests ────────────────────────────────────────────────────────────────────────────
@@ -200,6 +206,28 @@ if(AIBOOSTER_BUILD_TESTS)
     )
     target_link_libraries(test_vpncore PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
     add_test(NAME vpncore COMMAND test_vpncore)
+
+    # The whole connection pipeline minus the UI, against a stub engine.
+    qt_add_executable(test_connectionmodel
+        tests/test_connectionmodel.cpp
+        src/models/connectionmodel.cpp
+        src/models/profilelistmodel.cpp
+        src/models/proxylistmodel.cpp
+        src/models/settingsmodel.cpp
+        src/models/vpncore.cpp
+        src/core/CoreProcess.cpp
+        src/core/PrivateFiles.cpp
+        src/platform/SystemProxy.cpp
+        src/services/ClashApi.cpp
+        src/services/FreeProfiles.cpp
+        src/services/SubscriptionParser.cpp
+    )
+    target_compile_definitions(test_connectionmodel PRIVATE
+        AIBOOSTER_FREE_URL="${AIBOOSTER_FREE_URL}"
+        AIBOOSTER_FREE_BACKUP_URL="${AIBOOSTER_FREE_BACKUP_URL}"
+    )
+    target_link_libraries(test_connectionmodel PRIVATE Qt6::Test Qt6::Quick Qt6::Network)
+    add_test(NAME connectionmodel COMMAND test_connectionmodel)
 
     qt_add_executable(test_subscriptionparser
         tests/test_subscriptionparser.cpp

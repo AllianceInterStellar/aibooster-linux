@@ -26,6 +26,12 @@ engine's own source is at
 - Server list with latency, plus the engine's own selector/urltest groups
 - Live traffic and connection counts from the engine's Clash API
 - Engine log stream in-app
+- System tray icon: connection state at a glance, connect/disconnect from its menu, and the
+  app keeps running there when the window is closed (KDE, and GNOME with the AppIndicator
+  extension; elsewhere closing the window quits as before)
+- Automatic reconnect when an established tunnel drops — backing off from 2 s to 60 s over
+  five attempts, and waiting for the network rather than retrying while offline. A connect
+  that never succeeded is not retried
 - Routing, DNS, inbound, TLS-tricks and WARP settings
 - **Desktop proxy integration** for GNOME (gsettings) and KDE Plasma (kioslaverc), with
   crash recovery — see below

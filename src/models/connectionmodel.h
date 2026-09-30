@@ -30,6 +30,8 @@ class ConnectionModel : public QObject
     /// outright for anyone who browsed away while the connect was still dialling.
     Q_PROPERTY(QString sessionNotice READ sessionNotice NOTIFY sessionNoticeChanged)
     Q_PROPERTY(bool sessionNoticeIsError READ sessionNoticeIsError NOTIFY sessionNoticeChanged)
+    /// True while an automatic reconnect is scheduled or waiting for the network.
+    Q_PROPERTY(bool reconnecting READ reconnecting NOTIFY reconnectingChanged)
 
 public:
     enum Status {
@@ -60,6 +62,11 @@ public:
     QString statusLog() const;
     QString sessionNotice() const;
     bool sessionNoticeIsError() const;
+    bool reconnecting() const { return m_reconnectAttempt > 0; }
+
+    /// Delay before each automatic reconnect attempt, in seconds; its length is the number
+    /// of attempts before giving up. Public for the tests.
+    static const QList<int> &reconnectDelaysSeconds();
 
     Q_INVOKABLE void toggleConnection();
     /// User-initiated re-attempt from the notice banner: tears the current session down (if
@@ -74,6 +81,7 @@ signals:
     void statsChanged();
     void statusLogChanged();
     void sessionNoticeChanged();
+    void reconnectingChanged();
     /// The connect attempt failed. statusLog alone is not enough — nothing binds it, so a
     /// failed connect used to leave the button snapping back with no explanation at all.
     void connectionFailed(const QString &error);
@@ -86,6 +94,16 @@ private:
     void connectFree();
     /// Abandons the attempt in progress, whichever step it is at.
     void cancelConnect();
+
+    /// Auto-reconnect after an established tunnel dropped. Returns false when it will not
+    /// (setting off), leaving the caller to report the failure.
+    bool scheduleReconnect(const QString &error);
+    void onReconnectTimer();
+    /// Ends a reconnect cycle: it succeeded, or the user took over.
+    void stopReconnecting();
+    void setReconnectAttempt(int attempt);
+    void onReachabilityChanged();
+    static bool networkIsDown();
     void onVpnConnected();
     void onVpnDisconnected();
     void onVpnError(const QString &error);
@@ -122,6 +140,13 @@ private:
     bool m_reconnectAfterDisconnect = false;
     /// Bumped by every cancel, so asynchronous steps of an abandoned attempt can tell.
     quint64 m_attempt = 0;
+
+    /// 0 outside a reconnect cycle; otherwise which attempt is scheduled or running.
+    int m_reconnectAttempt = 0;
+    QTimer m_reconnectTimer;
+    /// The timer fired while the network was down; try as soon as it comes back.
+    bool m_waitingForNetwork = false;
+    QString m_lastDropError;
 
     Status m_status = Disconnected;
     QString m_uploadSpeed = "0 B/s";

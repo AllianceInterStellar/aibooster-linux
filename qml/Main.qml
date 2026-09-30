@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import AiBooster.Models
 
 ApplicationWindow {
     id: root
@@ -13,6 +14,18 @@ ApplicationWindow {
     color: "#000000"
 
     property int currentIndex: 0
+
+    // Closing the window keeps the tunnel up in the tray when there is one and the user
+    // wants that; otherwise it quits (which disconnects and restores the system proxy).
+    // `function (close)` rather than an arrow: Qt 6.2's QML engine is the floor.
+    onClosing: function (close) {
+        if (Tray.available && SettingsModel.closeToTray) {
+            close.accepted = false
+            root.hide()
+        } else {
+            Qt.quit()
+        }
+    }
 
     readonly property var navItems: [
         // Vector icons shipped in the binary, not emoji. Emoji live in the astral plane and

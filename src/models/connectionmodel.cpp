@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkInformation>
 #include <QNetworkProxy>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -50,6 +51,14 @@ const QStringList &ipEndpoints()
 
 ConnectionModel *ConnectionModel::s_instance = nullptr;
 
+const QList<int> &ConnectionModel::reconnectDelaysSeconds()
+{
+    // Quick at first (most drops are the engine restarting or a brief network blip), then
+    // backing off so a server that is really gone is not hammered.
+    static const QList<int> delays{2, 5, 10, 30, 60};
+    return delays;
+}
+
 ConnectionModel::ConnectionModel(QObject *parent)
     : QObject(parent)
 {
@@ -66,6 +75,23 @@ ConnectionModel::ConnectionModel(QObject *parent)
 
     m_statsTimer.setInterval(kStatsIntervalMs);
     connect(&m_statsTimer, &QTimer::timeout, this, &ConnectionModel::pollStats);
+
+    m_reconnectTimer.setSingleShot(true);
+    connect(&m_reconnectTimer, &QTimer::timeout, this, &ConnectionModel::onReconnectTimer);
+
+    // Knowing when the network is down lets a reconnect wait for it instead of spending its
+    // attempts on a machine that is offline (a laptop lid closed, Wi-Fi switching). Without
+    // a backend (no NetworkManager) every check reads "not known to be down", which is the
+    // behaviour we had before.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 4, 0)
+    QNetworkInformation::loadBackendByFeatures(QNetworkInformation::Feature::Reachability);
+#else
+    QNetworkInformation::load(QNetworkInformation::Feature::Reachability);
+#endif
+    if (QNetworkInformation *info = QNetworkInformation::instance()) {
+        connect(info, &QNetworkInformation::reachabilityChanged, this,
+                &ConnectionModel::onReachabilityChanged);
+    }
 
     // main.cpp builds SettingsModel and ProfileListModel after this one, so the auto-connect
     // decision has to wait for the event loop — every singleton exists by then.
@@ -105,11 +131,15 @@ void ConnectionModel::setSessionNotice(const QString &message, bool isError)
 
 void ConnectionModel::dismissSessionNotice()
 {
+    // The ✕ on a "reconnecting in…" banner means "stop trying", not just "hide this".
+    stopReconnecting();
     setSessionNotice({}, false);
 }
 
 void ConnectionModel::toggleConnection()
 {
+    // Whatever the user asked for replaces any reconnect we had planned.
+    stopReconnecting();
     switch (m_status) {
     case Disconnected:
         setStatus(Connecting);
@@ -145,6 +175,7 @@ void ConnectionModel::cancelConnect()
 
 void ConnectionModel::retryConnection()
 {
+    stopReconnecting();
     setSessionNotice({}, false);
     switch (m_status) {
     case Connected:
@@ -194,10 +225,10 @@ void ConnectionModel::connectFree()
 {
     m_pendingProxyName = QStringLiteral("AiBooster Free");
     const quint64 attempt = m_attempt;
-    // NOT connectVpn(FreeProfiles::kPrimaryUrl): that URL answers a profile INDEX, and handing
-    // the index to the core yields a config with zero outbounds — the core reports nothing and
-    // the app would claim "Connected" with no tunnel. FreeProfiles::fetch() resolves the index
-    // to a real subscription body first.
+    // Not the endpoint URL itself: it answers a profile INDEX, and handing the index to the
+    // core yields a config with zero outbounds — the core reports nothing and the app would
+    // claim "Connected" with no tunnel. FreeProfiles::fetch() resolves the index to a real
+    // subscription body first.
     m_freeProfiles->fetch(
         [this, attempt](const QString &config) {
             // Abandoned while the fetch ran. The status alone cannot tell: a cancel followed
@@ -222,6 +253,7 @@ void ConnectionModel::onVpnConnected()
     m_ipAddress = QStringLiteral("Checking…");
     resetStats();
     // A successful connect answers whatever the last failure was complaining about.
+    stopReconnecting();
     setSessionNotice({}, false);
     setStatus(Connected);
     emit statsChanged();
@@ -271,13 +303,112 @@ void ConnectionModel::appendStatusLog(const QString &line)
 
 void ConnectionModel::onVpnError(const QString &error)
 {
+    // A tunnel that was up and went down, or a reconnect attempt that failed, is worth
+    // retrying. A first connect that fails is not: that is a bad config or no network, and
+    // retrying it in a loop would only bury the reason.
+    const bool dropped = m_status == Connected || m_reconnectAttempt > 0;
+
     // "ERROR " so the Logs page files it under Error.
     appendStatusLog(QStringLiteral("ERROR ") + error);
     m_reconnectAfterDisconnect = false;
     stopStatsPolling();
     setStatus(Disconnected);
+
+    // Decided before connectionFailed goes out, so listeners (the tray's notification) can
+    // tell "reconnecting" from "gave up" by reading reconnecting().
+    const bool retrying = dropped && scheduleReconnect(error);
     emit connectionFailed(error);
-    setSessionNotice(QStringLiteral("Could not connect: %1").arg(error), true);
+    if (!retrying)
+        setSessionNotice(QStringLiteral("Could not connect: %1").arg(error), true);
+}
+
+bool ConnectionModel::scheduleReconnect(const QString &error)
+{
+    if (!SettingsModel::instance() || !SettingsModel::instance()->autoReconnect()) {
+        stopReconnecting();
+        return false;
+    }
+
+    const QList<int> &delays = reconnectDelaysSeconds();
+    if (m_reconnectAttempt >= delays.size()) {
+        stopReconnecting();
+        setSessionNotice(QStringLiteral("Connection lost, and %1 attempts to reconnect failed: %2")
+                             .arg(delays.size())
+                             .arg(error),
+                         true);
+        return true;
+    }
+
+    m_lastDropError = error;
+    setReconnectAttempt(m_reconnectAttempt + 1);
+    const int seconds = delays.at(m_reconnectAttempt - 1);
+    m_reconnectTimer.start(seconds * 1000);
+    onVpnStatusMessage(QStringLiteral("Reconnecting in %1 s (attempt %2 of %3)")
+                           .arg(seconds)
+                           .arg(m_reconnectAttempt)
+                           .arg(delays.size()));
+    setSessionNotice(QStringLiteral("Connection lost: %1. Reconnecting in %2 s (attempt %3 of %4)…")
+                         .arg(error)
+                         .arg(seconds)
+                         .arg(m_reconnectAttempt)
+                         .arg(delays.size()),
+                     true);
+    return true;
+}
+
+void ConnectionModel::onReconnectTimer()
+{
+    if (m_reconnectAttempt == 0 || m_status != Disconnected)
+        return;
+    if (networkIsDown()) {
+        // Does not use up an attempt: onReachabilityChanged() resumes when it is back.
+        m_waitingForNetwork = true;
+        onVpnStatusMessage(QStringLiteral("Waiting for the network to reconnect"));
+        setSessionNotice(QStringLiteral("Connection lost: %1. Waiting for the network…")
+                             .arg(m_lastDropError),
+                         true);
+        return;
+    }
+    m_waitingForNetwork = false;
+    onVpnStatusMessage(QStringLiteral("Reconnecting (attempt %1 of %2)")
+                           .arg(m_reconnectAttempt)
+                           .arg(reconnectDelaysSeconds().size()));
+    setStatus(Connecting);
+    startConnect();
+}
+
+void ConnectionModel::onReachabilityChanged()
+{
+    if (networkIsDown())
+        return;
+    // Back online while a reconnect waits: go now rather than at the end of the backoff.
+    if (m_reconnectAttempt > 0 && m_status == Disconnected
+        && (m_waitingForNetwork || m_reconnectTimer.isActive())) {
+        m_reconnectTimer.stop();
+        onReconnectTimer();
+    }
+}
+
+bool ConnectionModel::networkIsDown()
+{
+    const QNetworkInformation *info = QNetworkInformation::instance();
+    return info && info->reachability() == QNetworkInformation::Reachability::Disconnected;
+}
+
+void ConnectionModel::stopReconnecting()
+{
+    m_reconnectTimer.stop();
+    m_waitingForNetwork = false;
+    m_lastDropError.clear();
+    setReconnectAttempt(0);
+}
+
+void ConnectionModel::setReconnectAttempt(int attempt)
+{
+    const bool was = reconnecting();
+    m_reconnectAttempt = attempt;
+    if (was != reconnecting())
+        emit reconnectingChanged();
 }
 
 void ConnectionModel::resetStats()
